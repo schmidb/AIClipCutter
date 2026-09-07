@@ -84,9 +84,10 @@ def main():
     parser.add_argument("--clips", type=int, default=6, help="Clips per video (default: 6)")
     parser.add_argument("--min-duration", type=int, default=10, help="Min duration in seconds")
     parser.add_argument("--max-duration", type=int, default=20, help="Max duration in seconds")
+    parser.add_argument("--max-videos", type=int, default=None, help="Limit number of playlist videos to process")
     args = parser.parse_args()
 
-    if args.preset in ["tedx", "linkedin"]:
+    if args.preset in ["tedx", "linkedin", "miriam"]:
         args.preset = f"config/{args.preset}.yaml"
 
     # Determine videos to run
@@ -98,8 +99,10 @@ def main():
         with open(args.playlist, "r", encoding="utf-8") as f:
             playlist_meta = json.load(f)
             video_targets = playlist_meta.get("videos", []) if isinstance(playlist_meta, dict) else playlist_meta
+        if args.max_videos and args.max_videos > 0:
+            video_targets = video_targets[:args.max_videos]
         title = playlist_meta.get('playlist_title', args.playlist) if isinstance(playlist_meta, dict) else args.playlist
-        print(f"📋 Loaded {len(video_targets)} videos from playlist: {title}")
+        print(f"📋 Loaded {len(video_targets)} videos to process from playlist: {title}")
     else:
         print("❌ Error: Please specify --url or --playlist")
         sys.exit(1)
