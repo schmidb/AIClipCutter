@@ -11,19 +11,10 @@ Applies:
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
-
-if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
-
-
 from typing import Optional, List, Tuple
 
 
@@ -123,9 +114,12 @@ def detect_speaker_framing_trajectory(
             contents=contents,
             config={"response_mime_type": "application/json"}
         )
-        data = json.loads(res.text)
-
-        trajectory: List[Tuple[float, float]] = []
+        raw_text = res.text.strip()
+        try:
+            data = json.loads(raw_text, strict=False)
+        except Exception:
+            clean_json = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', raw_text)
+            data = json.loads(clean_json)
         frames_data = data.get("frames", [])
         if isinstance(frames_data, list):
             for item in frames_data:
