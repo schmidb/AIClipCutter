@@ -33,12 +33,9 @@ cd /opt/aiclipcutter
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-if [ -f "engine/requirements.txt" ]; then
-    pip install -r engine/requirements.txt
-fi
-pip install google-genai faster-whisper mediapipe yt-dlp pyyaml
+pip install google-genai yt-dlp pyyaml
 
-echo ">>> [4/5] Running Batch Clipping Job with OpenSource-Clipping Engine..."
+echo ">>> [4/5] Running Batch Clipping Job with AIClipCutter Native Pipeline..."
 python run_batch.py --playlist config/playlist_tedx.json --preset tedx
 
 # Sync final clips and schedule to Cloud Storage

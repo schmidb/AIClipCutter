@@ -91,5 +91,4 @@ Process talks from `config/playlist_markus.json` using `--preset config/linkedin
 
 ## 5. Repository Maintenance Decision
 - **`PROJECT_PLAN.md`**: Maintained as the single, authoritative project roadmap and architecture document.
-- **`implementation_plan.md`**: Removed from the repository root to eliminate duplicate, conflicting specs.
-- **`/engine`**: Completely removed from the repository. The clean native `core/` pipeline is the sole, dedicated production engine.
+- **Unified Architecture**: The clean native `core/` pipeline is the sole, dedicated production system.
