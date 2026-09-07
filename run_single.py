@@ -131,7 +131,7 @@ def step_moments(vtt_path: Path, work_dir: Path, preset_path: str, clips_count: 
 def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
     """Step 3: Cut and render 9:16 vertical MP4 video clips."""
     print("\n" + "=" * 60)
-    print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (FFmpeg)")
+    print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (AI Smart Centering + FFmpeg)")
     print("=" * 60)
 
     rendered_clips = []
@@ -154,7 +154,8 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
             start_time=start_t,
             end_time=end_t,
             output_path=str(clip_path),
-            hook_banner=hook
+            hook_banner=hook,
+            enable_ai_centering=True
         )
 
         if success:
