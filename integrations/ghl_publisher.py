@@ -55,6 +55,7 @@ def format_ghl_csv(
             full_content = caption_text
         
         media_url = clip.get("media_url", "")
+        cover_image = clip.get("cover_image", "") or clip.get("cover_path", "")
         hook_banner = clip.get("hook_banner", "")
         
         rows.append({
@@ -63,6 +64,7 @@ def format_ghl_csv(
             "Hook Banner": hook_banner,
             "Content": full_content,
             "Media URL": media_url,
+            "Cover Image": cover_image,
             "Duration (sec)": clip.get("duration", 0),
             "Source Video": clip.get("source_video_title", "")
         })
@@ -80,6 +82,7 @@ def format_ghl_csv(
         "Hook Banner",
         "Content",
         "Media URL",
+        "Cover Image",
         "Duration (sec)",
         "Source Video"
     ]

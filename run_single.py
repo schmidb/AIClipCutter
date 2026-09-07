@@ -20,14 +20,17 @@ import subprocess
 import sys
 
 if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 from pathlib import Path
 
 from core.gemini_extractor import extract_viral_moments
 from core.compositor import render_vertical_clip
+from core.subtitles import extract_clip_vtt_cues, polish_subtitles_with_gemini, generate_ass_file
 from integrations.ghl_publisher import format_ghl_csv
 
 
@@ -131,12 +134,20 @@ def step_moments(vtt_path: Path, work_dir: Path, preset_path: str, clips_count: 
 def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
     """Step 3: Cut and render 9:16 vertical MP4 video clips."""
     print("\n" + "=" * 60)
-    print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (AI Smart Centering + FFmpeg)")
+    print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (AI Smart Centering + Subtitles + FFmpeg)")
     print("=" * 60)
 
     rendered_clips = []
     clips_dir = work_dir / "clips"
     clips_dir.mkdir(exist_ok=True)
+
+    # Detect VTT subtitle file for spoken dialogue sync
+    vtt_files = list(work_dir.glob("*.vtt"))
+    vtt_path = vtt_files[0] if vtt_files else None
+
+    # Subtitle temp directory
+    temp_subs_dir = work_dir / "_temp_subs"
+    temp_subs_dir.mkdir(exist_ok=True)
 
     for i, m in enumerate(moments, 1):
         clip_name = f"clip_{i}.mp4"
@@ -144,10 +155,22 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
         start_t = float(m.get("start_time", 0))
         end_t = float(m.get("end_time", start_t + 15))
         hook = m.get("hook_banner", "")
+        duration = end_t - start_t
 
         print(f"\n🎬 Rendering Clip #{i}/{len(moments)}: {clip_name}")
-        print(f"   Time Range: {start_t:.2f}s -> {end_t:.2f}s ({end_t - start_t:.1f}s)")
+        print(f"   Time Range: {start_t:.2f}s -> {end_t:.2f}s ({duration:.1f}s)")
         print(f"   Hook:       {hook}")
+
+        # AI Subtitle Polishing (Fix typos, Irish place names, verbal stutters)
+        ass_path = None
+        if vtt_path and vtt_path.exists():
+            raw_cues = extract_clip_vtt_cues(vtt_path, start_t, end_t)
+            if raw_cues:
+                print(f"   📝 Polishing {len(raw_cues)} subtitle cues with Gemini 3.8 Flash...")
+                polished_cues = polish_subtitles_with_gemini(raw_cues, duration)
+                temp_ass = temp_subs_dir / f"clip_{i}.ass"
+                generate_ass_file(polished_cues, temp_ass)
+                ass_path = str(temp_ass)
 
         success = render_vertical_clip(
             source_video=str(source_video),
@@ -155,14 +178,23 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
             end_time=end_t,
             output_path=str(clip_path),
             hook_banner=hook,
-            enable_ai_centering=True
+            enable_ai_centering=True,
+            ass_path=ass_path,
+            generate_cover=True
         )
 
         if success:
             clip_meta = dict(m)
             clip_meta["local_path"] = str(clip_path)
-            clip_meta["duration"] = round(end_t - start_t, 2)
+            cover_file = clips_dir / f"cover_{i}.jpg"
+            if cover_file.exists():
+                clip_meta["cover_path"] = str(cover_file)
+            clip_meta["duration"] = round(duration, 2)
             rendered_clips.append(clip_meta)
+
+    # Clean up temp subtitles
+    import shutil
+    shutil.rmtree(temp_subs_dir, ignore_errors=True)
 
     print(f"\n🎉 Successfully rendered {len(rendered_clips)} clips in {clips_dir}!")
     return rendered_clips
@@ -178,7 +210,6 @@ def step_ghl(rendered_clips: list, work_dir: Path, video_title: str) -> Path:
     gcs_bucket = "aiclipcutter-media-7821"
     has_gcs = False
 
-    # Check if gcloud / gsutil is authenticated
     try:
         res = subprocess.run(["gcloud", "auth", "print-access-token"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode == 0:
@@ -199,7 +230,6 @@ def step_ghl(rendered_clips: list, work_dir: Path, video_title: str) -> Path:
             subprocess.run(["gsutil", "cp", local_file, gcs_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             media_url = public_url
         else:
-            # Local file reference for manual GHL upload
             media_url = local_file
 
         ghl_items.append({
@@ -208,6 +238,7 @@ def step_ghl(rendered_clips: list, work_dir: Path, video_title: str) -> Path:
             "caption": item.get("caption") or item.get("instagram_caption") or item.get("linkedin_caption") or "",
             "hashtags": item.get("hashtags", []),
             "media_url": media_url,
+            "cover_image": item.get("cover_path", ""),
             "source_video_title": video_title
         })
 
@@ -298,6 +329,9 @@ def process_single_video(
                     if clip_file.exists():
                         cm = dict(m)
                         cm["local_path"] = str(clip_file)
+                        cover_file = clips_dir / f"cover_{i}.jpg"
+                        if cover_file.exists():
+                            cm["cover_path"] = str(cover_file)
                         cm["duration"] = round(float(m.get("end_time", 0)) - float(m.get("start_time", 0)), 2)
                         rendered_clips.append(cm)
         step_ghl(rendered_clips, work_dir, display_title)

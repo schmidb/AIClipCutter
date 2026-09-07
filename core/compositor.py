@@ -12,8 +12,16 @@ Applies:
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 def detect_speaker_center_ratio(
@@ -98,12 +106,17 @@ def render_vertical_clip(
     target_height: int = 1920,
     speaker_center_ratio: Optional[float] = None,
     enable_ai_centering: bool = True,
-    banner_fade_seconds: float = 3.5
+    banner_fade_seconds: float = 3.5,
+    ass_path: Optional[str] = None,
+    generate_cover: bool = True
 ) -> bool:
     """
     Renders a 9:16 vertical video clip from source video using FFmpeg.
-    If enable_ai_centering is True, dynamically centers the vertical crop on the speaker.
-    Hook banner headlines appear prominently for the first 3 seconds, then smoothly fade out by 3.5s.
+    - AI Smart Centering (speaker dynamically tracked and centered)
+    - 3.5s smooth fade-out hook headline banner
+    - Burned-in ASS dynamic subtitles in Instagram safe zone
+    - Broadcast-standard -14 LUFS audio normalization + 0.4s clean outro fade
+    - Dedicated 1080x1920 cover image export (cover_*.jpg)
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -143,7 +156,16 @@ def render_vertical_clip(
         )
         filter_complex += f",{drawtext}"
 
+    # 4. Burn-in ASS dynamic subtitles if provided
+    if ass_path and os.path.exists(ass_path):
+        ass_filter_path = Path(ass_path).as_posix()
+        filter_complex += f",ass={ass_filter_path}"
+
     duration = max(0.5, end_time - start_time)
+
+    # 5. Broadcast Audio Processing: Stage Rumble Cut (80Hz) + -14 LUFS Loudness + 0.4s Smooth Outro Fade
+    fade_start = max(0.1, duration - 0.4)
+    audio_filter = f"highpass=f=80,loudnorm=I=-14:LRA=11:TP=-1.5,afade=t=out:st={fade_start:.2f}:d=0.4"
 
     cmd = [
         "ffmpeg",
@@ -152,6 +174,7 @@ def render_vertical_clip(
         "-i", source_video,
         "-t", str(duration),
         "-vf", filter_complex,
+        "-af", audio_filter,
         "-c:v", "libx264",
         "-preset", "fast",
         "-crf", "22",
@@ -166,6 +189,26 @@ def render_vertical_clip(
         if res.returncode == 0 and os.path.exists(output_path):
             file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
             print(f"   ✅ Rendered: {os.path.basename(output_path)} ({duration:.1f}s, {file_size_mb:.2f} MB, speaker_x={speaker_center_ratio:.2f})")
+            
+            # 6. Dedicated High-Res Cover Thumbnail Generation
+            if generate_cover:
+                out_p = Path(output_path)
+                cover_name = out_p.stem.replace("clip_", "cover_") + ".jpg"
+                cover_path = str(out_p.parent / cover_name)
+                thumb_time = min(1.0, duration / 2.0)
+                thumb_cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(thumb_time),
+                    "-i", output_path,
+                    "-frames:v", "1",
+                    "-update", "1",
+                    "-q:v", "2",
+                    cover_path
+                ]
+                subprocess.run(thumb_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(cover_path):
+                    print(f"      📸 Exported Reel Cover: {cover_name}")
+
             return True
         else:
             print(f"   ❌ FFmpeg render error for {output_path}: {res.stderr.decode('utf-8', errors='ignore')[-300:]}")
