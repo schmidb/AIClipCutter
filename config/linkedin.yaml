@@ -1,0 +1,51 @@
+preset_name: "linkedin"
+display_name: "Markus Thought Leadership"
+target_platform: "linkedin"
+
+# Clip Constraints
+clips_per_video: 5
+min_duration_seconds: 15
+max_duration_seconds: 30
+aspect_ratio: "9:16"
+
+# Visual Framing & Subtitles
+face_detector: "mediapipe"
+font_style: "CLEAN_MODERN"
+words_per_subtitle: 5
+hook_duration_seconds: 3.0
+hook_style: "banner_top"
+
+# Call-to-Action & Formatting
+cta_text: "What has been your experience with this? Let's discuss in the comments below."
+hashtags:
+  - "#Leadership"
+  - "#BusinessGrowth"
+  - "#Strategy"
+  - "#ExecutiveCoaching"
+  - "#Entrepreneurship"
+
+# Gemini Moment Detection Prompt
+gemini_prompt: |
+  You are an executive content strategist specializing in high-engagement LinkedIn video posts.
+  Analyze the provided video transcript and identify {num_clips} impactful soundbites between {min_duration} and {max_duration} seconds.
+
+  SELECTION CRITERIA FOR LINKEDIN:
+  1. PRACTICAL INSIGHT: The clip must share a tactical business lesson, leadership framework, contrarian opinion, or personal entrepreneurial breakthrough.
+  2. EXECUTIVE CLARITY: Crisp, clear communication without rambling.
+  3. ENGAGEMENT TRIGGER: The point made should spark debate or reflection among senior professionals and business founders.
+
+  OUTPUT FORMAT (Strict JSON Array):
+  [
+    {
+      "clip_index": 1,
+      "start_time": 305.0,
+      "end_time": 328.0,
+      "duration": 23.0,
+      "virality_score": 92,
+      "hook_banner": "The biggest mistake first-time founders make",
+      "spoken_opening": "First words spoken in this clip...",
+      "linkedin_post": "Most leaders think scaling is about doing more.\n\nIn reality, it's about doing fewer things, but with ruthless precision.\n\nWhen we scaled our operations, the breakthrough came when we eliminated 40% of our low-margin offerings.\n\nWhat has been your experience with this? Let's discuss in the comments below.",
+      "hashtags": ["#Leadership", "#BusinessGrowth", "#Strategy", "#ExecutiveCoaching"]
+    }
+  ]
+

@@ -1,0 +1,24 @@
+# Credentials & Keys
+config/gcp_service_account_key.json
+*.json.key
+.env
+*.env
+
+# Outputs & Temporary Video Files
+output/
+outputs/
+downloads/
+temp/
+*.mp4
+*.wav
+*.mp3
+*.ass
+*.srt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+

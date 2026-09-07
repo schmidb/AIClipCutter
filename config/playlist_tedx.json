@@ -1,0 +1,72 @@
+{
+  "playlist_title": "TEDx Glenbeigh Talks",
+  "playlist_url": "https://www.youtube.com/playlist?list=PLFMWqSoXk5OsfNvUeJRl_bJyY0DFXDk1F",
+  "preset": "tedx",
+  "videos": [
+    {
+      "id": "8pUxo0CZw5w",
+      "title": "Why you should take a walk in the park | Roser Bosch | TEDxGlenbeigh",
+      "speaker": "Roser Bosch",
+      "duration": "16:17",
+      "duration_seconds": 977,
+      "url": "https://www.youtube.com/watch?v=8pUxo0CZw5w"
+    },
+    {
+      "id": "17ej8XgPpMs",
+      "title": "Inspiration, imagination, and innovation in my life's journey | Paul Byrne | TEDxGlenbeigh",
+      "speaker": "Paul Byrne",
+      "duration": "13:37",
+      "duration_seconds": 817,
+      "url": "https://www.youtube.com/watch?v=17ej8XgPpMs"
+    },
+    {
+      "id": "1uaAfRhwuAQ",
+      "title": "How rural living changed my view on life | Nikolina Tijardovic | TEDxGlenbeigh",
+      "speaker": "Nikolina Tijardovic",
+      "duration": "13:18",
+      "duration_seconds": 798,
+      "url": "https://www.youtube.com/watch?v=1uaAfRhwuAQ"
+    },
+    {
+      "id": "aWmH7t3sZbs",
+      "title": "When Running Toward Yourself Is the Only Way Home | Fiola Foley | TEDxGlenbeigh",
+      "speaker": "Fiola Foley",
+      "duration": "17:45",
+      "duration_seconds": 1065,
+      "url": "https://www.youtube.com/watch?v=aWmH7t3sZbs"
+    },
+    {
+      "id": "-m8jIhQyiDY",
+      "title": "From Breathless to Breathe Less: Run smart. Run nasal | Patrick McKeown | TEDxGlenbeigh",
+      "speaker": "Patrick McKeown",
+      "duration": "17:57",
+      "duration_seconds": 1077,
+      "url": "https://www.youtube.com/watch?v=-m8jIhQyiDY"
+    },
+    {
+      "id": "OKH_YOOEcdQ",
+      "title": "The Power of Giving Birth - to Yourself | Miriam Schmidberger | TEDxGlenbeigh",
+      "speaker": "Miriam Schmidberger",
+      "duration": "12:54",
+      "duration_seconds": 774,
+      "url": "https://www.youtube.com/watch?v=OKH_YOOEcdQ"
+    },
+    {
+      "id": "SOjzpKAPTzw",
+      "title": "What is the true cost of cheap food? | Kenneth Keavey | TEDxGlenbeigh",
+      "speaker": "Kenneth Keavey",
+      "duration": "17:12",
+      "duration_seconds": 1032,
+      "url": "https://www.youtube.com/watch?v=SOjzpKAPTzw"
+    },
+    {
+      "id": "C7U9_rz6uyg",
+      "title": "The accidental tribe: how trees, locals, soup changed everything | Debbie Reynolds | TEDxGlenbeigh",
+      "speaker": "Debbie Reynolds",
+      "duration": "14:59",
+      "duration_seconds": 899,
+      "url": "https://www.youtube.com/watch?v=C7U9_rz6uyg"
+    }
+  ]
+}
+

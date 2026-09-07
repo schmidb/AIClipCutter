@@ -1,0 +1,60 @@
+preset_name: "tedx"
+display_name: "TEDx Glenbeigh 2027"
+target_platform: "instagram_reels"
+
+# Clip Constraints
+clips_per_video: 6
+min_duration_seconds: 10
+max_duration_seconds: 20
+aspect_ratio: "9:16"
+
+# Visual Framing & Subtitles
+face_detector: "mediapipe"
+font_style: "HORMOZI"
+words_per_subtitle: 4
+hook_duration_seconds: 3.0
+hook_style: "banner_top"
+
+# Event Copy & Call-to-Action
+event_name: "TEDx Glenbeigh 2027"
+cta_text: "🎟️ TEDx Glenbeigh returns in 2027. Don't miss the talks that will shape the future. Tap the link in bio to join the priority ticket waitlist!"
+hashtags:
+  - "#TEDx"
+  - "#TEDxGlenbeigh"
+  - "#IdeasWorthSpreading"
+  - "#Glenbeigh2027"
+  - "#Inspiration"
+  - "#TalksThatMatter"
+  - "#PersonalGrowth"
+  - "#LifeLessons"
+  - "#TEDTalks"
+  - "#MindsetShift"
+  - "#ViralReels"
+  - "#ReelsInstagram"
+
+# Gemini Moment Detection Prompt
+gemini_prompt: |
+  You are an expert viral short-form video editor specializing in TEDx talks and Instagram Reels.
+  Analyze the provided video transcript and identify {num_clips} viral moments strictly between {min_duration} and {max_duration} seconds.
+
+  SELECTION CRITERIA FOR VIRAL CLIPS:
+  1. IMMEDIATE SPOKEN HOOK: The first sentence must instantly grab attention (e.g., a provocative question, counter-intuitive statement, or bold truth). There must be ZERO filler, greeting, or stage intro.
+  2. COMPLETE PUNCHLINE: The clip must deliver a complete, satisfying epiphany or insight by the end. The viewer should feel inspired or shocked.
+  3. LOOPING POTENTIAL: The ending must cleanly transition back or leave the viewer wanting to re-watch.
+  4. STRICT DURATION: Each clip MUST be between {min_duration} and {max_duration} seconds (ideal: 12-16 seconds).
+
+  OUTPUT FORMAT (Strict JSON Array):
+  [
+    {
+      "clip_index": 1,
+      "start_time": 124.5,
+      "end_time": 139.2,
+      "duration": 14.7,
+      "virality_score": 95,
+      "hook_banner": "THE LIE ABOUT SUCCESS NO ONE ADMITS",
+      "spoken_opening": "First words spoken in this clip...",
+      "instagram_caption": "What if everything you were told about success was backwards? 🤔\n\nAt TEDx Glenbeigh, this moment stopped the room.\n\n🎟️ TEDx Glenbeigh returns in 2027. Don't miss the talks that will shape the future. Tap the link in bio to join the priority ticket waitlist!",
+      "hashtags": ["#TEDx", "#TEDxGlenbeigh", "#IdeasWorthSpreading", "#Glenbeigh2027", "#Inspiration", "#MindsetShift"]
+    }
+  ]
+
