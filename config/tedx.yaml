@@ -1,6 +1,7 @@
 preset_name: "tedx"
 display_name: "TEDx Glenbeigh 2027"
 target_platform: "instagram_reels"
+gemini_model: "gemini-2.5-flash"  # Options: gemini-2.5-flash, gemini-2.5-pro, gemini-3-flash-preview
 
 # Clip Constraints
 clips_per_video: 6

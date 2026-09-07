@@ -36,6 +36,7 @@ def extract_viral_moments(
 
     client = genai.Client(vertexai=True, project=project_id, location=location)
 
+    model_to_use = preset_config.get("gemini_model", model_name)
     num_clips = preset_config.get("clips_per_video", 6)
     min_dur = preset_config.get("min_duration_seconds", 10)
     max_dur = preset_config.get("max_duration_seconds", 20)
@@ -49,10 +50,10 @@ def extract_viral_moments(
 
     full_request = f"{formatted_prompt}\n\n=== FULL VIDEO TRANSCRIPT WITH TIMESTAMPS ===\n{transcript_text}"
 
-    print(f"[Gemini Extractor] Querying Vertex AI ({model_name}) for {num_clips} clips ({min_dur}-{max_dur}s)...")
+    print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}) for {num_clips} clips ({min_dur}-{max_dur}s)...")
     
     response = client.models.generate_content(
-        model=model_name,
+        model=model_to_use,
         contents=full_request,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
