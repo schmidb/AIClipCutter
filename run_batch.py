@@ -16,7 +16,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from run_single import process_single_video
-from integrations.ghl_publisher import format_ghl_csv
+from integrations.ghl_publisher import format_ghl_csv, mix_playlist_items
 
 
 def run_clip_engine_cloud(
@@ -28,20 +28,16 @@ def run_clip_engine_cloud(
     font_style: str = "HORMOZI",
     face_detector: str = "mediapipe"
 ) -> bool:
-    """Invokes the legacy opensource-clipping engine in engine/main.py for cloud VM batch."""
-    engine_main = Path("engine/main.py").resolve()
+    """Invokes the cloud VM to process a video."""
     cmd = [
-        sys.executable,
-        str(engine_main),
-        "--url", video_url,
-        "--clips", str(clips_count),
-        "--ratio", "9:16",
-        "--font-style", font_style,
-        "--face-detector", face_detector,
+        "python", "-m", "core.engine_main",
+        "--video-url", video_url,
         "--preset", preset,
+        "--clips", str(clips_count),
         "--min-duration", str(min_duration),
         "--max-duration", str(max_duration),
-        "--hook-v2",
+        "--font-style", font_style,
+        "--face-detector", face_detector,
         "--export-ghl"
     ]
     env = os.environ.copy()
@@ -54,24 +50,48 @@ def run_clip_engine_cloud(
     return process.returncode == 0
 
 
-def create_master_ghl_schedule(all_rendered_items: list, output_csv_path: Path, platform: str = "Instagram"):
-    """Aggregates all clips from all playlist videos into a single master GoHighLevel CSV."""
+def create_master_ghl_schedule(
+    all_rendered_items: list,
+    output_csv_path: Path,
+    platform: str = "Instagram",
+    start_date: datetime = None,
+    end_date: datetime = None,
+    post_interval_days: int = 1,
+    mix: bool = True
+):
+    """Aggregates and mixes all clips from playlist videos into a master GoHighLevel CSV."""
     if not all_rendered_items:
         return
 
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
-    start_date = datetime.now() + timedelta(days=1)
+    
+    # Interleave speakers and content angles so consecutive posts rotate
+    items_to_schedule = mix_playlist_items(all_rendered_items) if mix else all_rendered_items
+    
+    # Default to mid-September 2026 -> Christmas 2026 if not specified
+    if start_date is None:
+        start_date = datetime(2026, 9, 15, 18, 0, 0)
+    if end_date is None and (post_interval_days is None or post_interval_days == 1):
+        end_date = datetime(2026, 12, 24, 18, 0, 0)
+
     format_ghl_csv(
-        clips_data=all_rendered_items,
+        clips_data=items_to_schedule,
         output_csv_path=str(output_csv_path),
         start_date=start_date,
-        post_interval_days=1,
+        end_date=end_date,
+        post_interval_days=post_interval_days or 1,
         post_time_hour=18,
         platform=platform
     )
+    
+    num_posts = len(items_to_schedule)
+    start_str = start_date.strftime("%Y-%m-%d")
+    end_str = end_date.strftime("%Y-%m-%d") if end_date else f"every {post_interval_days} days"
     print(f"\n🌟 Master GoHighLevel Schedule Created ({platform}):")
-    print(f"   Path:  {output_csv_path.resolve()}")
-    print(f"   Posts: {len(all_rendered_items)} scheduled across {len(all_rendered_items)} consecutive days at 6:00 PM")
+    print(f"   Path:        {output_csv_path.resolve()}")
+    print(f"   Mixing:      {'Enabled (Interleaved by Speaker & Content Angle)' if mix else 'Sequential'}")
+    print(f"   Date Range:  {start_str} to {end_str}")
+    print(f"   Total Posts: {num_posts} reels scheduled across the calendar window")
 
 
 def main():
@@ -86,6 +106,10 @@ def main():
     parser.add_argument("--max-duration", type=int, default=20, help="Max duration in seconds")
     parser.add_argument("--max-videos", type=int, default=None, help="Limit number of playlist videos to process")
     parser.add_argument("--min-virality", type=int, default=None, help="Minimum virality score threshold (0-100)")
+    parser.add_argument("--start-date", default="2026-09-15", help="Campaign start date (YYYY-MM-DD, default: 2026-09-15)")
+    parser.add_argument("--end-date", default="2026-12-24", help="Campaign end date (YYYY-MM-DD, default: 2026-12-24)")
+    parser.add_argument("--post-interval", type=int, default=None, help="Fixed interval in days between posts (overrides end-date distribution)")
+    parser.add_argument("--no-mix", action="store_true", help="Disable speaker interleaving / mixing")
     args = parser.parse_args()
 
     if args.preset in ["tedx", "linkedin", "miriam"]:
@@ -173,7 +197,28 @@ def main():
 
     if args.mode == "local" and all_master_items:
         master_csv = Path("output/ghl_master_playlist_schedule.csv")
-        create_master_ghl_schedule(all_master_items, master_csv, platform=target_platform)
+        start_dt = None
+        if args.start_date:
+            try:
+                start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(hour=18, minute=0, second=0)
+            except Exception:
+                pass
+        end_dt = None
+        if args.end_date:
+            try:
+                end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(hour=18, minute=0, second=0)
+            except Exception:
+                pass
+
+        create_master_ghl_schedule(
+            all_rendered_items=all_master_items,
+            output_csv_path=master_csv,
+            platform=target_platform,
+            start_date=start_dt,
+            end_date=end_dt,
+            post_interval_days=args.post_interval,
+            mix=not args.no_mix
+        )
 
     print("\n" + "=" * 70)
     print("🎉 All videos in batch processed successfully!")

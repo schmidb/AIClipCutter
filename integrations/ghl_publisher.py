@@ -208,10 +208,46 @@ def build_linkedin_post_content(
     return "\n\n".join(content_sections)
 
 
+def mix_playlist_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Evenly distributes and interleaves clips across speakers and source videos
+    so that consecutive posts rotate speakers and content angles, avoiding fatigue.
+
+    Example with Speakers A, B, C (5 clips each):
+      Post 1: Speaker A, Clip 1 (Angle 1: Contrarian Take)
+      Post 2: Speaker B, Clip 1 (Angle 1: Contrarian Take)
+      Post 3: Speaker C, Clip 1 (Angle 1: Contrarian Take)
+      Post 4: Speaker A, Clip 2 (Angle 2: Tactical Framework)
+      ...
+    """
+    if not items:
+        return []
+
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    speaker_order = []
+
+    for item in items:
+        spk = item.get("speaker") or item.get("source_video_title") or "Unknown"
+        if spk not in speaker_order:
+            speaker_order.append(spk)
+        grouped[spk].append(item)
+
+    mixed = []
+    max_len = max(len(clips) for clips in grouped.values())
+    for clip_idx in range(max_len):
+        for spk in speaker_order:
+            if clip_idx < len(grouped[spk]):
+                mixed.append(grouped[spk][clip_idx])
+
+    return mixed
+
+
 def format_ghl_csv(
     clips_data: List[Dict[str, Any]],
     output_csv_path: str,
     start_date: datetime = None,
+    end_date: datetime = None,
     post_interval_days: int = 1,
     post_time_hour: int = 18,  # 6:00 PM peak engagement
     post_time_minute: int = 0,
@@ -220,18 +256,37 @@ def format_ghl_csv(
     """
     Exports clip metadata to a GoHighLevel Social Planner compatible CSV file.
     Supports both Instagram Reels and LinkedIn thought leadership formats.
+    Distributes posts evenly between start_date and end_date if end_date is provided.
     """
     if start_date is None:
         start_date = datetime.now() + timedelta(days=1)
-    
-    current_schedule_time = start_date.replace(
-        hour=post_time_hour, minute=post_time_minute, second=0, microsecond=0
-    )
+
+    total_clips = len(clips_data)
+    schedule_dates = []
+
+    if end_date and total_clips > 1:
+        # Evenly distribute posts across the calendar window
+        total_days = (end_date.date() - start_date.date()).days
+        for i in range(total_clips):
+            offset_days = round(i * total_days / (total_clips - 1))
+            dt = datetime.combine(
+                start_date.date() + timedelta(days=offset_days),
+                datetime.min.time()
+            ).replace(hour=post_time_hour, minute=post_time_minute, second=0, microsecond=0)
+            schedule_dates.append(dt)
+    elif total_clips > 0:
+        current_schedule_time = start_date.replace(
+            hour=post_time_hour, minute=post_time_minute, second=0, microsecond=0
+        )
+        for _ in range(total_clips):
+            schedule_dates.append(current_schedule_time)
+            current_schedule_time += timedelta(days=post_interval_days)
 
     ghl_rows = []
     metadata_rows = []
     for i, clip in enumerate(clips_data):
-        schedule_str = current_schedule_time.strftime("%Y-%m-%d %H:%M:%S")
+        schedule_time = schedule_dates[i]
+        schedule_str = schedule_time.strftime("%Y-%m-%d %H:%M:%S")
         
         caption_text = (
             clip.get("linkedin_post")
@@ -291,9 +346,6 @@ def format_ghl_csv(
             "Duration (sec)": clip.get("duration", 0),
             "Source Video": clip.get("source_video_title", "")
         })
-        
-        # Advance schedule date for the next post
-        current_schedule_time += timedelta(days=post_interval_days)
 
     # Write GHL Social Planner compliant CSV
     output_path = Path(output_csv_path)
