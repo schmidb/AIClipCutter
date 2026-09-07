@@ -1,36 +1,35 @@
 """
 AIClipCutter Batch Pipeline Runner.
-Orchestrates NaufalRizqullah/opensource-clipping engine with:
-- TEDx Glenbeigh 2027 and LinkedIn Presets
-- Strict 10-20s duration constraints
-- Google Cloud Vertex AI & Google Cloud Credits
-- GoHighLevel Social Planner batch CSV scheduling
+Runs the entire playlist locally (or in the cloud) with:
+- AI Smart Centering (Gemini 3.8 Flash multimodal vision)
+- High-precision 9:16 vertical video clipping with hook text banners
+- Local high-speed rendering (10-20s per video)
+- GoHighLevel Social Planner batch CSV scheduling (individual + master aggregated schedule)
 """
 
 import argparse
+import csv
 import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
+from run_single import process_single_video
 from integrations.ghl_publisher import format_ghl_csv
 
 
-def run_clip_engine(
+def run_clip_engine_cloud(
     video_url: str,
     preset: str = "tedx",
     clips_count: int = 6,
     min_duration: int = 10,
     max_duration: int = 20,
     font_style: str = "HORMOZI",
-    face_detector: str = "mediapipe",
-    output_dir: str = "output"
-) -> list:
-    """
-    Invokes the opensource-clipping engine located in engine/main.py.
-    """
+    face_detector: str = "mediapipe"
+) -> bool:
+    """Invokes the legacy opensource-clipping engine in engine/main.py for cloud VM batch."""
     engine_main = Path("engine/main.py").resolve()
-    
     cmd = [
         sys.executable,
         str(engine_main),
@@ -45,18 +44,6 @@ def run_clip_engine(
         "--hook-v2",
         "--export-ghl"
     ]
-
-    print("\n" + "=" * 60)
-    print(f"🎬 Running OpenSource Clipping Engine")
-    print(f"URL:          {video_url}")
-    print(f"Preset:       {preset}")
-    print(f"Target Clips: {clips_count} ({min_duration}-{max_duration}s)")
-    print(f"Subtitle:     {font_style} (Kinetic Karaoke)")
-    print("=" * 60)
-    print("Command:\n" + " ".join(cmd))
-    print("=" * 60 + "\n")
-
-    # Set UTF-8 and GCP credentials in environment
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     gcp_key = Path("config/gcp_service_account_key.json").resolve()
@@ -67,15 +54,35 @@ def run_clip_engine(
     return process.returncode == 0
 
 
+def create_master_ghl_schedule(all_rendered_items: list, output_csv_path: Path):
+    """Aggregates all clips from all playlist videos into a single master GoHighLevel CSV."""
+    if not all_rendered_items:
+        return
+
+    output_csv_path.parent.mkdir(parents=True, exist_ok=True)
+    start_date = datetime.now() + timedelta(days=1)
+    format_ghl_csv(
+        clips_data=all_rendered_items,
+        output_csv_path=str(output_csv_path),
+        start_date=start_date,
+        post_interval_days=1,
+        post_time_hour=18,
+        platform="Instagram"
+    )
+    print(f"\n🌟 Master GoHighLevel Schedule Created:")
+    print(f"   Path:  {output_csv_path.resolve()}")
+    print(f"   Posts: {len(all_rendered_items)} scheduled across {len(all_rendered_items)} consecutive days at 6:00 PM")
+
+
 def main():
     parser = argparse.ArgumentParser(description="AIClipCutter Batch Pipeline")
+    parser.add_argument("--mode", default="local", choices=["local", "cloud"], help="Execution mode: 'local' (fast on PC) or 'cloud' (GCP VM)")
     parser.add_argument("--url", help="Single video URL to process")
     parser.add_argument("--playlist", default="config/playlist_tedx.json", help="Playlist JSON file")
-    parser.add_argument("--preset", default="tedx", choices=["tedx", "linkedin", "default"], help="Content preset")
+    parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
     parser.add_argument("--clips", type=int, default=6, help="Clips per video (default: 6)")
     parser.add_argument("--min-duration", type=int, default=10, help="Min duration in seconds")
     parser.add_argument("--max-duration", type=int, default=20, help="Max duration in seconds")
-    parser.add_argument("--font-style", default="HORMOZI", help="Subtitle font style (HORMOZI, STORYTELLER, etc.)")
     args = parser.parse_args()
 
     # Determine videos to run
@@ -86,25 +93,63 @@ def main():
         with open(args.playlist, "r", encoding="utf-8") as f:
             data = json.load(f)
             video_targets = data.get("videos", [])
-        print(f"Loaded {len(video_targets)} videos from playlist: {data.get('playlist_title')}")
+        print(f"📋 Loaded {len(video_targets)} videos from playlist: {data.get('playlist_title')}")
     else:
         print("❌ Error: Please specify --url or --playlist")
         sys.exit(1)
 
-    for i, target in enumerate(video_targets, 1):
-        print(f"\n▶️ Starting Video {i}/{len(video_targets)}: {target.get('title')}")
-        success = run_clip_engine(
-            video_url=target["url"],
-            preset=args.preset,
-            clips_count=args.clips,
-            min_duration=args.min_duration,
-            max_duration=args.max_duration,
-            font_style=args.font_style
-        )
-        if not success:
-            print(f"⚠️ Warning: Processing video {target['url']} completed with errors.")
+    print("\n" + "=" * 70)
+    print(f"🚀 AIClipCutter Batch Processing — Mode: {args.mode.upper()}")
+    print(f"Total Videos:   {len(video_targets)}")
+    print(f"Clips / Video:  {args.clips}")
+    print(f"Total Target:   ~{len(video_targets) * args.clips} vertical clips")
+    print(f"Centering:      AI Smart Centering (Gemini 3.8 Flash Vision)")
+    print("=" * 70)
 
-    print("\n🎉 Batch processing completed!")
+    all_master_items = []
+
+    for i, target in enumerate(video_targets, 1):
+        v_url = target["url"]
+        v_title = target.get("title", f"Video {i}")
+        print(f"\n============================================================")
+        print(f"▶️ [VIDEO {i}/{len(video_targets)}] {v_title}")
+        print(f"============================================================")
+
+        if args.mode == "local":
+            clips = process_single_video(
+                url=v_url,
+                preset=args.preset,
+                clips=args.clips,
+                step="all",
+                video_title=v_title
+            )
+            for c in clips:
+                all_master_items.append({
+                    "duration": c.get("duration", 15),
+                    "hook_banner": c.get("hook_banner", ""),
+                    "caption": c.get("caption") or c.get("instagram_caption") or c.get("linkedin_caption") or "",
+                    "hashtags": c.get("hashtags", []),
+                    "media_url": c.get("local_path", ""),
+                    "source_video_title": v_title
+                })
+        else:
+            success = run_clip_engine_cloud(
+                video_url=v_url,
+                preset="tedx",
+                clips_count=args.clips,
+                min_duration=args.min_duration,
+                max_duration=args.max_duration
+            )
+            if not success:
+                print(f"⚠️ Warning: Cloud processing for {v_url} finished with errors.")
+
+    if args.mode == "local" and all_master_items:
+        master_csv = Path("output/ghl_master_playlist_schedule.csv")
+        create_master_ghl_schedule(all_master_items, master_csv)
+
+    print("\n" + "=" * 70)
+    print("🎉 All videos in batch processed successfully!")
+    print("=" * 70 + "\n")
 
 
 if __name__ == "__main__":

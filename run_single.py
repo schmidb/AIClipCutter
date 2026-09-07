@@ -233,18 +233,28 @@ def main():
     )
     args = parser.parse_args()
 
-    # Create dedicated output directory for this video
-    video_id = extract_video_id(args.url)
+def process_single_video(
+    url: str,
+    preset: str = "config/tedx.yaml",
+    clips: int = 6,
+    step: str = "all",
+    video_title: str = ""
+) -> list:
+    """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
+    video_id = extract_video_id(url)
     work_dir = Path("output") / video_id
     work_dir.mkdir(parents=True, exist_ok=True)
 
+    display_title = video_title or f"TEDx Talk ({video_id})"
+
     print("\n" + "=" * 70)
     print(f"🎬 AIClipCutter — Single Video Mode")
-    print(f"Video URL:    {args.url}")
+    print(f"Video URL:    {url}")
     print(f"Video ID:     {video_id}")
+    print(f"Title:        {display_title}")
     print(f"Working Dir:  {work_dir.resolve()}")
-    print(f"Preset:       {args.preset}")
-    print(f"Step:         {args.step}")
+    print(f"Preset:       {preset}")
+    print(f"Step:         {step}")
     print("=" * 70)
 
     source_video = work_dir / "source.mp4"
@@ -264,24 +274,23 @@ def main():
             moments = json.load(f)
 
     # Execute selected steps
-    if args.step in ["all", "download"]:
-        source_video, vtt_path = step_download(args.url, work_dir)
+    if step in ["all", "download"]:
+        source_video, vtt_path = step_download(url, work_dir)
 
-    if args.step in ["all", "moments"]:
+    if step in ["all", "moments"]:
         if not vtt_path or not vtt_path.exists():
-            source_video, vtt_path = step_download(args.url, work_dir)
-        moments = step_moments(vtt_path, work_dir, args.preset, args.clips)
+            source_video, vtt_path = step_download(url, work_dir)
+        moments = step_moments(vtt_path, work_dir, preset, clips)
 
-    if args.step in ["all", "render"]:
+    if step in ["all", "render"]:
         if not source_video.exists():
-            source_video, _ = step_download(args.url, work_dir)
+            source_video, _ = step_download(url, work_dir)
         if not moments:
-            moments = step_moments(vtt_path, work_dir, args.preset, args.clips)
+            moments = step_moments(vtt_path, work_dir, preset, clips)
         rendered_clips = step_render(source_video, moments, work_dir)
 
-    if args.step in ["all", "ghl"]:
+    if step in ["all", "ghl"]:
         if not rendered_clips:
-            # Look for existing clips in clips_dir
             clips_dir = work_dir / "clips"
             if clips_dir.exists() and moments:
                 for i, m in enumerate(moments, 1):
@@ -291,12 +300,33 @@ def main():
                         cm["local_path"] = str(clip_file)
                         cm["duration"] = round(float(m.get("end_time", 0)) - float(m.get("start_time", 0)), 2)
                         rendered_clips.append(cm)
-        step_ghl(rendered_clips, work_dir, f"TEDx Talk ({video_id})")
+        step_ghl(rendered_clips, work_dir, display_title)
 
     print("\n" + "=" * 70)
     print("✅ Finished processing single video!")
     print(f"📂 Open your files at: {work_dir.resolve()}")
     print("=" * 70 + "\n")
+    return rendered_clips
+
+
+def main():
+    parser = argparse.ArgumentParser(description="AIClipCutter Single Video Pipeline")
+    parser.add_argument("--url", default="https://www.youtube.com/watch?v=8pUxo0CZw5w", help="YouTube video URL")
+    parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
+    parser.add_argument("--clips", type=int, default=6, help="Target number of clips to produce")
+    parser.add_argument(
+        "--step",
+        default="all",
+        choices=["all", "download", "moments", "render", "ghl"],
+        help="Execute specific step or 'all'"
+    )
+    args = parser.parse_args()
+    process_single_video(
+        url=args.url,
+        preset=args.preset,
+        clips=args.clips,
+        step=args.step
+    )
 
 
 if __name__ == "__main__":
