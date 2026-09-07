@@ -97,11 +97,13 @@ def render_vertical_clip(
     target_width: int = 1080,
     target_height: int = 1920,
     speaker_center_ratio: Optional[float] = None,
-    enable_ai_centering: bool = True
+    enable_ai_centering: bool = True,
+    banner_fade_seconds: float = 3.5
 ) -> bool:
     """
     Renders a 9:16 vertical video clip from source video using FFmpeg.
     If enable_ai_centering is True, dynamically centers the vertical crop on the speaker.
+    Hook banner headlines appear prominently for the first 3 seconds, then smoothly fade out by 3.5s.
     """
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
@@ -126,12 +128,18 @@ def render_vertical_clip(
     filter_complex = f"{crop_filter},scale={target_width}:{target_height}"
 
     if clean_hook:
+        if banner_fade_seconds and banner_fade_seconds > 0:
+            fade_start = max(0.5, banner_fade_seconds - 0.5)
+            fade_expr = f":enable='lte(t,{banner_fade_seconds})':alpha='if(lt(t,{fade_start}),1.0,1.0-(t-{fade_start})/0.5)'"
+        else:
+            fade_expr = ""
         drawtext = (
             f"drawtext=text='{clean_hook}':"
             f"fontsize=46:fontcolor=white:"
             f"box=1:boxcolor=black@0.65:boxborderw=18:"
             f"line_spacing=12:"
             f"x=(w-text_w)/2:y=240"
+            f"{fade_expr}"
         )
         filter_complex += f",{drawtext}"
 
