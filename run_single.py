@@ -187,14 +187,15 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
     temp_subs_dir.mkdir(exist_ok=True)
 
     for i, m in enumerate(moments, 1):
-        clip_name = f"clip_{i}.mp4"
+        clip_idx = m.get("clip_index", i)
+        clip_name = f"clip_{clip_idx}.mp4"
         clip_path = clips_dir / clip_name
         start_t = float(m.get("start_time", 0))
         end_t = float(m.get("end_time", start_t + 15))
         hook = m.get("hook_banner", "")
         duration = end_t - start_t
 
-        print(f"\n🎬 Rendering Clip #{i}/{len(moments)}: {clip_name}")
+        print(f"\n🎬 Rendering Clip #{clip_idx}/{len(moments)}: {clip_name}")
         print(f"   Time Range: {start_t:.2f}s -> {end_t:.2f}s ({duration:.1f}s)")
         print(f"   Hook:       {hook}")
 
@@ -205,7 +206,7 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
             if raw_cues:
                 print(f"   📝 Polishing {len(raw_cues)} subtitle cues with Gemini 3.8 Flash...")
                 polished_cues = polish_subtitles_with_gemini(raw_cues, duration)
-                temp_ass = temp_subs_dir / f"clip_{i}.ass"
+                temp_ass = temp_subs_dir / f"clip_{clip_idx}.ass"
                 generate_ass_file(polished_cues, temp_ass)
                 ass_path = str(temp_ass)
 
@@ -223,7 +224,7 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
         if success:
             clip_meta = dict(m)
             clip_meta["local_path"] = str(clip_path)
-            cover_file = clips_dir / f"cover_{i}.jpg"
+            cover_file = clips_dir / f"cover_{clip_idx}.jpg"
             if cover_file.exists():
                 clip_meta["cover_path"] = str(cover_file)
             clip_meta["duration"] = round(duration, 2)
