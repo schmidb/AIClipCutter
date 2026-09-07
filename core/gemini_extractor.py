@@ -24,7 +24,10 @@ def extract_viral_moments(
     preset_config: Dict[str, Any],
     project_id: str = "aiclipcutter-batch-7821",
     location: str = "global",
-    model_name: str = "gemini-3.8-flash"
+    model_name: str = "gemini-3.8-flash",
+    speaker_name: str = "",
+    video_title: str = "",
+    full_video_url: str = ""
 ) -> List[Dict[str, Any]]:
     """
     Sends the video transcript to Gemini on Vertex AI and parses structured clips.
@@ -47,11 +50,15 @@ def extract_viral_moments(
         system_prompt.replace("{num_clips}", str(num_clips))
         .replace("{min_duration}", str(min_dur))
         .replace("{max_duration}", str(max_dur))
+        .replace("{speaker_name}", speaker_name or "the speaker")
+        .replace("{video_title}", video_title or "this TEDx talk")
+        .replace("{full_video_url}", full_video_url or "")
     )
 
     full_request = f"{formatted_prompt}\n\n=== FULL VIDEO TRANSCRIPT WITH TIMESTAMPS ===\n{transcript_text}"
 
-    print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}) for {num_clips} clips ({min_dur}-{max_dur}s)...")
+    speaker_log = f" for '{speaker_name}'" if speaker_name else ""
+    print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}){speaker_log} for {num_clips} clips ({min_dur}-{max_dur}s)...")
     
     response = client.models.generate_content(
         model=model_to_use,
@@ -64,17 +71,26 @@ def extract_viral_moments(
 
     try:
         clips = json.loads(response.text)
-        print(f"[Gemini Extractor] Successfully identified {len(clips)} viral moments.")
-        return clips
     except json.JSONDecodeError as e:
         print(f"[Gemini Extractor] Warning: Raw response not strict JSON: {e}")
-        # Fallback if markdown fence was included
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:]
         if text.endswith("```"):
             text = text[:-3]
-        return json.loads(text.strip())
+        clips = json.loads(text.strip())
+
+    # Attach metadata to each moment
+    for clip in clips:
+        if speaker_name:
+            clip["speaker"] = speaker_name
+        if full_video_url:
+            clip["full_video_url"] = full_video_url
+        if video_title:
+            clip["source_video_title"] = video_title
+
+    print(f"[Gemini Extractor] Successfully identified {len(clips)} viral moments.")
+    return clips
 
 
 if __name__ == "__main__":

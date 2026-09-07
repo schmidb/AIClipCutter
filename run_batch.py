@@ -111,8 +111,9 @@ def main():
     for i, target in enumerate(video_targets, 1):
         v_url = target["url"]
         v_title = target.get("title", f"Video {i}")
+        v_speaker = target.get("speaker", "")
         print(f"\n============================================================")
-        print(f"▶️ [VIDEO {i}/{len(video_targets)}] {v_title}")
+        print(f"▶️ [VIDEO {i}/{len(video_targets)}] {v_title} ({v_speaker})")
         print(f"============================================================")
 
         if args.mode == "local":
@@ -121,7 +122,8 @@ def main():
                 preset=args.preset,
                 clips=args.clips,
                 step="all",
-                video_title=v_title
+                video_title=v_title,
+                speaker=v_speaker
             )
             for c in clips:
                 all_master_items.append({
@@ -130,6 +132,9 @@ def main():
                     "caption": c.get("caption") or c.get("instagram_caption") or c.get("linkedin_caption") or "",
                     "hashtags": c.get("hashtags", []),
                     "media_url": c.get("local_path", ""),
+                    "cover_image": c.get("cover_path", ""),
+                    "speaker": c.get("speaker") or v_speaker,
+                    "full_video_url": c.get("full_video_url") or v_url,
                     "source_video_title": v_title
                 })
         else:

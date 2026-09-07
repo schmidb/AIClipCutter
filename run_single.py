@@ -40,6 +40,32 @@ def extract_video_id(url: str) -> str:
     return match.group(1) if match else "sample_video"
 
 
+def get_video_info(url_or_id: str) -> dict:
+    """Resolves speaker, title, and YouTube URL from playlist_tedx.json if available."""
+    video_id = extract_video_id(url_or_id)
+    playlist_path = Path("config/playlist_tedx.json")
+    if playlist_path.exists():
+        try:
+            with open(playlist_path, "r", encoding="utf-8") as f:
+                pdata = json.load(f)
+                for v in pdata.get("videos", []):
+                    if v.get("id") == video_id or video_id in v.get("url", ""):
+                        return {
+                            "id": v.get("id"),
+                            "title": v.get("title", f"TEDx Talk ({video_id})"),
+                            "speaker": v.get("speaker", "TEDx Speaker"),
+                            "url": v.get("url", f"https://www.youtube.com/watch?v={video_id}")
+                        }
+        except Exception:
+            pass
+    return {
+        "id": video_id,
+        "title": f"TEDx Talk ({video_id})",
+        "speaker": "TEDx Speaker",
+        "url": f"https://www.youtube.com/watch?v={video_id}"
+    }
+
+
 def step_download(url: str, work_dir: Path) -> tuple[Path, Path]:
     """Step 1: Download video & English subtitles."""
     print("\n" + "=" * 60)
@@ -90,7 +116,15 @@ def step_download(url: str, work_dir: Path) -> tuple[Path, Path]:
     return source_video, vtt_path
 
 
-def step_moments(vtt_path: Path, work_dir: Path, preset_path: str, clips_count: int) -> list:
+def step_moments(
+    vtt_path: Path,
+    work_dir: Path,
+    preset_path: str,
+    clips_count: int,
+    speaker_name: str = "",
+    video_title: str = "",
+    full_video_url: str = ""
+) -> list:
     """Step 2: AI Moment Detection with Google Gemini Vertex AI."""
     print("\n" + "=" * 60)
     print("🧠 STEP 2: AI Moment Hunter (Google Gemini 3.8 Flash / Vertex AI)")
@@ -116,7 +150,10 @@ def step_moments(vtt_path: Path, work_dir: Path, preset_path: str, clips_count: 
 
     moments = extract_viral_moments(
         transcript_text=vtt_content,
-        preset_config=preset_cfg
+        preset_config=preset_cfg,
+        speaker_name=speaker_name,
+        video_title=video_title,
+        full_video_url=full_video_url
     )
 
     with open(moments_file, "w", encoding="utf-8") as f:
@@ -200,7 +237,13 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
     return rendered_clips
 
 
-def step_ghl(rendered_clips: list, work_dir: Path, video_title: str) -> Path:
+def step_ghl(
+    rendered_clips: list,
+    work_dir: Path,
+    video_title: str,
+    speaker_name: str = "",
+    full_video_url: str = ""
+) -> Path:
     """Step 4: Format and Export GoHighLevel Social Planner CSV."""
     print("\n" + "=" * 60)
     print("📅 STEP 4: Exporting GoHighLevel Social Planner Schedule")
@@ -239,6 +282,8 @@ def step_ghl(rendered_clips: list, work_dir: Path, video_title: str) -> Path:
             "hashtags": item.get("hashtags", []),
             "media_url": media_url,
             "cover_image": item.get("cover_path", ""),
+            "speaker": item.get("speaker") or speaker_name,
+            "full_video_url": item.get("full_video_url") or full_video_url,
             "source_video_title": video_title
         })
 
@@ -251,37 +296,29 @@ def step_ghl(rendered_clips: list, work_dir: Path, video_title: str) -> Path:
     return csv_path
 
 
-def main():
-    parser = argparse.ArgumentParser(description="AIClipCutter Single Video Pipeline")
-    parser.add_argument("--url", required=True, help="YouTube video URL")
-    parser.add_argument("--preset", default="config/tedx.yaml", help="Preset config YAML (tedx or linkedin)")
-    parser.add_argument("--clips", type=int, default=6, help="Target number of clips (default: 6)")
-    parser.add_argument(
-        "--step",
-        default="all",
-        choices=["all", "download", "moments", "render", "ghl"],
-        help="Execute specific step or 'all'"
-    )
-    args = parser.parse_args()
-
 def process_single_video(
     url: str,
     preset: str = "config/tedx.yaml",
     clips: int = 6,
     step: str = "all",
-    video_title: str = ""
+    video_title: str = "",
+    speaker: str = ""
 ) -> list:
     """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
     video_id = extract_video_id(url)
     work_dir = Path("output") / video_id
     work_dir.mkdir(parents=True, exist_ok=True)
 
-    display_title = video_title or f"TEDx Talk ({video_id})"
+    vinfo = get_video_info(url)
+    speaker_name = speaker or vinfo.get("speaker", "")
+    full_video_url = vinfo.get("url", url)
+    display_title = video_title or vinfo.get("title", f"TEDx Talk ({video_id})")
 
     print("\n" + "=" * 70)
     print(f"🎬 AIClipCutter — Single Video Mode")
     print(f"Video URL:    {url}")
     print(f"Video ID:     {video_id}")
+    print(f"Speaker:      {speaker_name}")
     print(f"Title:        {display_title}")
     print(f"Working Dir:  {work_dir.resolve()}")
     print(f"Preset:       {preset}")
@@ -311,13 +348,29 @@ def process_single_video(
     if step in ["all", "moments"]:
         if not vtt_path or not vtt_path.exists():
             source_video, vtt_path = step_download(url, work_dir)
-        moments = step_moments(vtt_path, work_dir, preset, clips)
+        moments = step_moments(
+            vtt_path=vtt_path,
+            work_dir=work_dir,
+            preset_path=preset,
+            clips_count=clips,
+            speaker_name=speaker_name,
+            video_title=display_title,
+            full_video_url=full_video_url
+        )
 
     if step in ["all", "render"]:
         if not source_video.exists():
             source_video, _ = step_download(url, work_dir)
         if not moments:
-            moments = step_moments(vtt_path, work_dir, preset, clips)
+            moments = step_moments(
+                vtt_path=vtt_path,
+                work_dir=work_dir,
+                preset_path=preset,
+                clips_count=clips,
+                speaker_name=speaker_name,
+                video_title=display_title,
+                full_video_url=full_video_url
+            )
         rendered_clips = step_render(source_video, moments, work_dir)
 
     if step in ["all", "ghl"]:
@@ -334,7 +387,13 @@ def process_single_video(
                             cm["cover_path"] = str(cover_file)
                         cm["duration"] = round(float(m.get("end_time", 0)) - float(m.get("start_time", 0)), 2)
                         rendered_clips.append(cm)
-        step_ghl(rendered_clips, work_dir, display_title)
+        step_ghl(
+            rendered_clips=rendered_clips,
+            work_dir=work_dir,
+            video_title=display_title,
+            speaker_name=speaker_name,
+            full_video_url=full_video_url
+        )
 
     print("\n" + "=" * 70)
     print("✅ Finished processing single video!")
@@ -346,6 +405,8 @@ def process_single_video(
 def main():
     parser = argparse.ArgumentParser(description="AIClipCutter Single Video Pipeline")
     parser.add_argument("--url", default="https://www.youtube.com/watch?v=8pUxo0CZw5w", help="YouTube video URL")
+    parser.add_argument("--speaker", default="", help="Speaker name (optional)")
+    parser.add_argument("--title", default="", help="Video title (optional)")
     parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
     parser.add_argument("--clips", type=int, default=6, help="Target number of clips to produce")
     parser.add_argument(
@@ -359,7 +420,9 @@ def main():
         url=args.url,
         preset=args.preset,
         clips=args.clips,
-        step=args.step
+        step=args.step,
+        video_title=args.title,
+        speaker=args.speaker
     )
 
 

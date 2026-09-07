@@ -38,11 +38,27 @@ gemini_prompt: |
   You are an expert viral short-form video editor specializing in TEDx talks and Instagram Reels.
   Analyze the provided video transcript and identify {num_clips} viral moments strictly between {min_duration} and {max_duration} seconds.
 
+  VIDEO CONTEXT:
+  - Speaker: {speaker_name}
+  - Talk Title: {video_title}
+  - Full Talk YouTube URL: {full_video_url}
+  - Event: TEDx Glenbeigh (Glenbeigh, Co. Kerry, Ireland)
+  - Instagram Handle: @TEDxGlenbeigh
+
   SELECTION CRITERIA FOR VIRAL CLIPS:
   1. IMMEDIATE SPOKEN HOOK: The first sentence must instantly grab attention (e.g., a provocative question, counter-intuitive statement, or bold truth). There must be ZERO filler, greeting, or stage intro.
   2. COMPLETE PUNCHLINE: The clip must deliver a complete, satisfying epiphany or insight by the end. The viewer should feel inspired or shocked.
   3. LOOPING POTENTIAL: The ending must cleanly transition back or leave the viewer wanting to re-watch.
   4. STRICT DURATION: Each clip MUST be between {min_duration} and {max_duration} seconds (ideal: 12-16 seconds).
+
+  CAPTION GUIDELINES:
+  - Open with a compelling 1-2 sentence hook highlighting the core insight of this clip.
+  - Specifically mention speaker {speaker_name} by name.
+  - Include the exact speaker credit and YouTube link:
+    🗣️ Speaker: {speaker_name}
+    🔗 Watch the full talk: {full_video_url}
+  - Include the community follow invitation:
+    ✨ Follow @TEDxGlenbeigh for more inspiring TEDx talks and world-class ideas straight from Glenbeigh, in Co. Kerry! ☘️
 
   OUTPUT FORMAT (Strict JSON Array):
   [
@@ -54,8 +70,8 @@ gemini_prompt: |
       "virality_score": 95,
       "hook_banner": "THE LIE ABOUT SUCCESS NO ONE ADMITS",
       "spoken_opening": "First words spoken in this clip...",
-      "instagram_caption": "What if everything you were told about success was backwards? 🤔\n\nAt TEDx Glenbeigh, this moment stopped the room.\n\n🎟️ TEDx Glenbeigh returns in 2027. Don't miss the talks that will shape the future. Tap the link in bio to join the priority ticket waitlist!",
-      "hashtags": ["#TEDx", "#TEDxGlenbeigh", "#IdeasWorthSpreading", "#Glenbeigh2027", "#Inspiration", "#MindsetShift"]
+      "instagram_caption": "What if everything you were told about success was backwards? 🤔 In this powerful moment, speaker {speaker_name} challenges conventional wisdom.\n\n🗣️ Speaker: {speaker_name}\n🔗 Watch the full talk: {full_video_url}\n\n✨ Follow @TEDxGlenbeigh for more inspiring TEDx talks and world-class ideas straight from Glenbeigh, in Co. Kerry! ☘️",
+      "hashtags": ["#TEDxGlenbeigh", "#TEDx", "#Glenbeigh", "#Kerry", "#Ireland", "#IdeasWorthSpreading"]
     }
   ]
 
