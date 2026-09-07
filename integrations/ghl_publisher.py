@@ -203,7 +203,8 @@ def format_ghl_csv(
         hour=post_time_hour, minute=post_time_minute, second=0, microsecond=0
     )
 
-    rows = []
+    ghl_rows = []
+    metadata_rows = []
     for i, clip in enumerate(clips_data):
         schedule_str = current_schedule_time.strftime("%Y-%m-%d %H:%M:%S")
         
@@ -237,7 +238,21 @@ def format_ghl_csv(
         cover_image = clip.get("cover_image", "") or clip.get("cover_path", "")
         hook_banner = clip.get("hook_banner", "")
         
-        rows.append({
+        # Video URL: GHL requires a valid public URL (e.g. http/https).
+        # If media_url is a local file path, leave videoUrls empty so GHL imports the post
+        # cleanly as a draft/scheduled post, allowing the user to attach the local clip in GHL.
+        video_url_val = media_url if media_url.startswith(("http://", "https://")) else ""
+
+        ghl_rows.append({
+            "postAtSpecificTime (YYYY-MM-DD HH:mm:ss)": schedule_str,
+            "content": full_content,
+            "link (OGmetaUrl)": "",
+            "imageUrls": "",
+            "gifUrl": "",
+            "videoUrls": video_url_val
+        })
+
+        metadata_rows.append({
             "Post Date": schedule_str,
             "Platform": platform,
             "Hook Banner": hook_banner,
@@ -251,11 +266,29 @@ def format_ghl_csv(
         # Advance schedule date for the next post
         current_schedule_time += timedelta(days=post_interval_days)
 
-    # Write CSV
+    # Write GHL Social Planner compliant CSV
     output_path = Path(output_csv_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    fieldnames = [
+    ghl_fieldnames = [
+        "postAtSpecificTime (YYYY-MM-DD HH:mm:ss)",
+        "content",
+        "link (OGmetaUrl)",
+        "imageUrls",
+        "gifUrl",
+        "videoUrls"
+    ]
+    
+    with open(output_path, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=ghl_fieldnames)
+        writer.writeheader()
+        writer.writerows(ghl_rows)
+        
+    print(f"[GHL Publisher] Exported {len(ghl_rows)} posts to {output_path} (GHL Social Planner compliant)")
+
+    # Also write local companion report with hook banners, cover paths, and durations
+    meta_report_path = output_path.parent / "clips_metadata_report.csv"
+    meta_fieldnames = [
         "Post Date",
         "Platform",
         "Hook Banner",
@@ -265,13 +298,14 @@ def format_ghl_csv(
         "Duration (sec)",
         "Source Video"
     ]
-    
-    with open(output_path, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-        
-    print(f"[GHL Publisher] Exported {len(rows)} posts to {output_path}")
+    try:
+        with open(meta_report_path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=meta_fieldnames)
+            writer.writeheader()
+            writer.writerows(metadata_rows)
+    except Exception:
+        pass
+
     return str(output_path)
 
 

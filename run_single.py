@@ -194,8 +194,18 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
         clip_path = clips_dir / clip_name
         start_t = float(m.get("start_time", 0))
         end_t = float(m.get("end_time", start_t + 15))
-        hook = m.get("hook_banner", "")
         duration = end_t - start_t
+        hook = m.get("hook_banner", "")
+        if clip_path.exists() and clip_path.stat().st_size > 500000:
+            print(f"\n🎬 Clip #{clip_idx}/{len(moments)} already rendered: {clip_name} ({clip_path.stat().st_size / 1024 / 1024:.2f} MB)")
+            clip_meta = dict(m)
+            clip_meta["local_path"] = str(clip_path)
+            cover_file = clips_dir / f"cover_{clip_idx}.jpg"
+            if cover_file.exists():
+                clip_meta["cover_path"] = str(cover_file)
+            clip_meta["duration"] = round(duration, 2)
+            rendered_clips.append(clip_meta)
+            continue
 
         print(f"\n🎬 Rendering Clip #{clip_idx}/{len(moments)}: {clip_name}")
         print(f"   Time Range: {start_t:.2f}s -> {end_t:.2f}s ({duration:.1f}s)")
