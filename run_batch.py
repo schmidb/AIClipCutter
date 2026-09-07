@@ -50,8 +50,24 @@ def create_master_ghl_schedule(
         post_time_hour=18,
         platform=platform
     )
+
+    # Automatically organize sequential master clips into output/ghl_master_clips/
+    master_clips_dir = output_csv_path.parent / "ghl_master_clips"
+    master_clips_dir.mkdir(parents=True, exist_ok=True)
+    for idx, item in enumerate(all_rendered_items, 1):
+        src_path = Path(item.get("media_url", ""))
+        src_cover = Path(item.get("cover_image", ""))
+        spk = "".join(c for c in item.get("speaker", "Speaker") if c.isalnum())
+        dest_clip = master_clips_dir / f"{idx:02d}_{spk}_{src_path.name}"
+        dest_cover = master_clips_dir / f"{idx:02d}_{spk}_{src_cover.name}"
+        if src_path.exists():
+            shutil.copy2(src_path, dest_clip)
+        if src_cover.exists():
+            shutil.copy2(src_cover, dest_cover)
+
     print(f"\n🌟 Master GoHighLevel Schedule Created ({platform}):")
-    print(f"   Path:  {output_csv_path.resolve()}")
+    print(f"   CSV:   {output_csv_path.resolve()}")
+    print(f"   Clips: {master_clips_dir.resolve()}")
     print(f"   Posts: {len(all_rendered_items)} scheduled from {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')} at 6:00 PM (mixed={mix})")
 
 

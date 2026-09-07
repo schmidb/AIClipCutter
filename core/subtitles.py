@@ -229,7 +229,13 @@ def polish_subtitles_with_gemini(
     if credentials_path.exists():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
-    client = genai.Client(vertexai=True, project=project_id, location=location)
+    from google.genai import types
+    client = genai.Client(
+        vertexai=True,
+        project=project_id,
+        location=location,
+        http_options=types.HttpOptions(timeout=45000)
+    )
 
     formatted_raw = "\n".join([f"[{c['start']}s - {c['end']}s] {c['text']}" for c in raw_cues])
 

@@ -56,11 +56,17 @@ def detect_speaker_framing_trajectory(
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
     from google import genai
+    from google.genai import types
     from PIL import Image
 
     client = None
     try:
-        client = genai.Client(vertexai=True, project=project_id, location=location)
+        client = genai.Client(
+            vertexai=True,
+            project=project_id,
+            location=location,
+            http_options=types.HttpOptions(timeout=35000)
+        )
     except Exception as e:
         print(f"   [AI Centering Warning] Could not initialize Gemini client: {e}")
         return [(0.0, 0.5)]
@@ -68,6 +74,7 @@ def detect_speaker_framing_trajectory(
     contents = []
     temp_files = []
     extracted_offsets = []
+    trajectory = []
 
     try:
         for idx, off in enumerate(offsets):

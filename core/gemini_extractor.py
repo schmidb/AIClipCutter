@@ -37,8 +37,14 @@ def extract_viral_moments(
     if credentials_path.exists():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
+    from google.genai import types
     location_to_use = preset_config.get("gemini_location", location)
-    client = genai.Client(vertexai=True, project=project_id, location=location_to_use)
+    client = genai.Client(
+        vertexai=True,
+        project=project_id,
+        location=location_to_use,
+        http_options=types.HttpOptions(timeout=60000)
+    )
 
     model_to_use = preset_config.get("gemini_model", model_name)
     num_clips = preset_config.get("clips_per_video", 6)
