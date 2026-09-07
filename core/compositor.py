@@ -26,73 +26,104 @@ if sys.platform == "win32":
 
 def detect_speaker_center_ratio(
     source_video: str,
-    timestamp: float,
+    start_time: float,
+    end_time: Optional[float] = None,
     project_id: str = "aiclipcutter-batch-7821",
     location: str = "global",
     model_name: str = "gemini-3.8-flash"
 ) -> float:
     """
-    Extracts a reference frame at the given timestamp and uses Gemini 3.8 Flash
-    multimodal vision to find the horizontal center ratio (0.0 to 1.0) of the primary human speaker.
-    Falls back to 0.5 (center) if detection fails or speaker is not visible.
+    Samples frames across the clip and uses Gemini 3.8 Flash multimodal vision
+    with 2D bounding-box spatial grounding to detect the exact horizontal center
+    of the primary human speaker.
+    Returns a float ratio between 0.05 and 0.95 (default 0.5 if undetected).
     """
+    if end_time is None or end_time <= start_time:
+        sample_times = [start_time]
+    else:
+        duration = end_time - start_time
+        # Sample at 30% and 70% of clip duration
+        sample_times = [
+            start_time + duration * 0.30,
+            start_time + duration * 0.70
+        ]
+
     temp_dir = Path("output/_temp_frames")
     temp_dir.mkdir(parents=True, exist_ok=True)
-    temp_frame = temp_dir / f"ref_{abs(hash(source_video)) % 10000}_{int(timestamp)}.jpg"
 
+    credentials_path = Path("config/gcp_service_account_key.json")
+    if credentials_path.exists():
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
+
+    from google import genai
+    from PIL import Image
+
+    client = None
     try:
-        cmd_frame = [
-            "ffmpeg", "-y",
-            "-ss", str(timestamp),
-            "-i", source_video,
-            "-vframes", "1",
-            "-q:v", "2",
-            str(temp_frame)
-        ]
-        subprocess.run(cmd_frame, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-
-        if not temp_frame.exists():
-            return 0.5
-
-        credentials_path = Path("config/gcp_service_account_key.json")
-        if credentials_path.exists():
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
-
-        from google import genai
-        from PIL import Image
-
         client = genai.Client(vertexai=True, project=project_id, location=location)
-        img = Image.open(temp_frame)
-
-        prompt = (
-            "Identify the human speaker standing on stage in this video frame.\n"
-            "Ignore slides, projector screens, banners, or logos.\n"
-            "Return a JSON object:\n"
-            "{\n"
-            '  "speaker_found": true,\n'
-            '  "speaker_center_x_ratio": <float between 0.0 and 1.0>\n'
-            "}"
-        )
-
-        res = client.models.generate_content(
-            model=model_name,
-            contents=[img, prompt],
-            config={"response_mime_type": "application/json"}
-        )
-        data = json.loads(res.text)
-        if data.get("speaker_found") and "speaker_center_x_ratio" in data:
-            ratio = float(data["speaker_center_x_ratio"])
-            if 0.05 <= ratio <= 0.95:
-                return ratio
     except Exception as e:
-        print(f"   [AI Centering Warning] Could not detect speaker at {timestamp:.1f}s ({e}), using default center.")
-    finally:
-        if temp_frame.exists():
-            try:
-                temp_frame.unlink()
-            except Exception:
-                pass
+        print(f"   [AI Centering Warning] Could not initialize Gemini client: {e}")
+        return 0.5
 
+    prompt = (
+        "Detect the primary human speaker standing on stage in this video frame.\n"
+        "Ignore slides, projector screens, background banners, and audience.\n"
+        "Return the 2D bounding box [ymin, xmin, ymax, xmax] of the speaker normalized on a scale of 0 to 1000.\n"
+        "Output JSON:\n"
+        "{\n"
+        '  "speaker_found": true,\n'
+        '  "box_2d": [ymin, xmin, ymax, xmax]\n'
+        "}"
+    )
+
+    detected_centers = []
+
+    for ts in sample_times:
+        temp_frame = temp_dir / f"ref_{abs(hash(source_video)) % 10000}_{int(ts * 100)}.jpg"
+        try:
+            cmd_frame = [
+                "ffmpeg", "-y",
+                "-ss", str(ts),
+                "-i", source_video,
+                "-vframes", "1",
+                "-update", "1",
+                "-q:v", "2",
+                str(temp_frame)
+            ]
+            subprocess.run(cmd_frame, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+
+            if not temp_frame.exists():
+                continue
+
+            img = Image.open(temp_frame)
+            res = client.models.generate_content(
+                model=model_name,
+                contents=[img, prompt],
+                config={"response_mime_type": "application/json"}
+            )
+            data = json.loads(res.text)
+            if data.get("speaker_found") and "box_2d" in data:
+                box = data["box_2d"]
+                if len(box) == 4:
+                    # box is [ymin, xmin, ymax, xmax] in 0-1000 scale
+                    center_ratio = (float(box[1]) + float(box[3])) / 2000.0
+                    if 0.05 <= center_ratio <= 0.95:
+                        detected_centers.append(center_ratio)
+        except Exception:
+            pass
+        finally:
+            if temp_frame.exists():
+                try:
+                    temp_frame.unlink()
+                except Exception:
+                    pass
+
+    if detected_centers:
+        final_ratio = round(sum(detected_centers) / len(detected_centers), 3)
+        print(f"   🎯 [AI Smart Centering] Speaker detected at horizontal center = {final_ratio:.3f}")
+        return final_ratio
+
+    print("   ℹ️ [AI Smart Centering] Speaker not detected or center default used (0.500)")
     return 0.5
 
 
@@ -122,8 +153,11 @@ def render_vertical_clip(
 
     # 1. AI Smart Centering
     if enable_ai_centering and speaker_center_ratio is None:
-        sample_time = start_time + min(2.0, (end_time - start_time) / 2.0)
-        speaker_center_ratio = detect_speaker_center_ratio(source_video, sample_time)
+        speaker_center_ratio = detect_speaker_center_ratio(
+            source_video=source_video,
+            start_time=start_time,
+            end_time=end_time
+        )
 
     if speaker_center_ratio is None:
         speaker_center_ratio = 0.5
