@@ -1,0 +1,80 @@
+preset_name: "miriam"
+display_name: "Miriam Schmidberger - Greator Keynote"
+target_platform: "instagram_reels"
+gemini_model: "gemini-3.8-flash"
+temperature: 0.75
+
+# Clip Constraints
+clips_per_video: 8
+min_duration_seconds: 12
+max_duration_seconds: 25
+aspect_ratio: "9:16"
+
+# Visual Framing & Subtitles
+face_detector: "mediapipe"
+font_style: "HORMOZI"
+words_per_subtitle: 4
+hook_duration_seconds: 3.5
+hook_style: "banner_top"
+
+# Event & Branding
+speaker_name: "Miriam Schmidberger"
+event_name: "Greator Festival 2024"
+talk_title: "Know your Why and Fly"
+instagram_handle: "@miriam.schmidberger"
+
+# Curated Base Hashtags
+hashtags:
+  - "#MiriamSchmidberger"
+  - "#GreatorFestival"
+  - "#Greator"
+  - "#KnowYourWhy"
+  - "#PersonalGrowth"
+  - "#MindsetShift"
+  - "#Transformation"
+  - "#InspirationReels"
+
+# Gemini Moment Detection Prompt (with high-creativity diverse content angles)
+gemini_prompt: |
+  You are an elite short-form video strategist and copywriter specializing in viral Instagram Reels for keynote speakers, TEDx, and Greator presentations.
+  Analyze the provided transcript of Miriam Schmidberger's keynote "Know your Why and Fly" at the Greator Festival 2024.
+  Identify {num_clips} emotionally resonant, high-impact moments strictly between {min_duration} and {max_duration} seconds.
+
+  SPEAKER CONTEXT:
+  - Speaker: Miriam Schmidberger (Founder, Speaker, Transformation Coach)
+  - Keynote Title: "Know your Why and Fly"
+  - Event: Greator Festival 2024
+  - Full Talk YouTube URL: {full_video_url}
+  - Instagram Handle: @miriam.schmidberger
+  - Themes: Breaking out of the rat race, overcoming fear, authentic self-discovery, finding your purpose ("Your Why"), life transformation.
+
+  CRITICAL CLIP SELECTION CRITERIA:
+  1. INSTANT HOOK: The first sentence spoken must halt the scroll immediately with an intriguing premise, relatable tension, or powerful question. ZERO filler or throat-clearing.
+  2. COMPLETE RESOLUTION: The clip must conclude on a profound insight, emotional breakthrough, or memorable punchline that leaves the viewer inspired.
+  3. DIVERSE TOPIC COVERAGE: Select moments from different parts of the talk highlighting distinct facets of her message.
+  4. STRICT DURATION: Each clip must be between {min_duration} and {max_duration} seconds.
+
+  HIGH CREATIVITY & VARIETY MANDATE (ANTI-FATIGUE):
+  Every single post must have a UNIQUE voice, angle, and layout! DO NOT repeat the same caption structure.
+  Assign each clip one of the following 5 content angles:
+  - Angle 1 (The Contrarian Reframe): Challenge common social expectations or conventional ideas of success.
+  - Angle 2 (The Tactical Mindset Shift): Actionable guidance, questions, or steps to evaluate one's life direction.
+  - Angle 3 (The Personal Epiphany / Story): Emotional, vulnerable reflection on making bold life changes.
+  - Angle 4 (The Debate / Reflection): A poignant question that compels viewers to pause, self-reflect, and comment.
+  - Angle 5 (The Minimalist Soundbite): Laser-focused, poetic 2-line quote that hits right at the heart.
+
+  OUTPUT FORMAT (Strict JSON Array):
+  [
+    {
+      "clip_index": 1,
+      "content_angle": "The Contrarian Reframe",
+      "start_time": 45.2,
+      "end_time": 62.5,
+      "duration": 17.3,
+      "virality_score": 95,
+      "hook_banner": "THE LIE OF THE RAT RACE",
+      "spoken_opening": "Do you want a life where you really thrive...",
+      "caption": "We were taught that safety meant staying in the race. But what if the greatest risk is living someone else's script?\n\nMiriam Schmidberger's keynote at the Greator Festival reminds us that thriving starts when you dare to ask 'Why?'",
+      "hashtags": ["#GreatorFestival", "#KnowYourWhy", "#MiriamSchmidberger", "#PersonalGrowth", "#SelfDiscovery", "#Transformation"]
+    }
+  ]

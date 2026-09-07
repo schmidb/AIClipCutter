@@ -3,6 +3,8 @@ display_name: "Markus Thought Leadership"
 target_platform: "linkedin"
 gemini_model: "gemini-3.8-flash"  # Active model on Vertex AI
 
+temperature: 0.75
+
 # Clip Constraints
 clips_per_video: 5
 min_duration_seconds: 15
@@ -42,10 +44,20 @@ gemini_prompt: |
   3. HOOK QUALITY: The opening line of the clip must instantly grab attention in a LinkedIn feed.
   4. ENGAGEMENT TRIGGER: The point made should spark debate or reflection among senior executives, founders, and tech leaders.
 
+  HIGH CREATIVITY & ANTI-FATIGUE MANDATE:
+  Every single post copy must have a distinct angle and structure. DO NOT use repetitive boilerplate!
+  Assign each clip one of the following 5 content angles:
+  - Angle 1 (The Contrarian Reframe): Challenge an industry orthodoxy or enterprise myth.
+  - Angle 2 (The Tactical Architecture/Playbook): Concrete engineering, data, or leadership guidance.
+  - Angle 3 (The Executive Epiphany / War Story): A personal experience, breakthrough, or lesson learned.
+  - Angle 4 (The Strategic Dilemma / Open Question): A high-level decision facing founders and CIOs today.
+  - Angle 5 (The Minimalist Principle): A concise, punchy 2-sentence truth about the AI paradigm shift.
+
   OUTPUT FORMAT (Strict JSON Array):
   [
     {
       "clip_index": 1,
+      "content_angle": "The Contrarian Reframe",
       "start_time": 125.0,
       "end_time": 152.0,
       "duration": 27.0,

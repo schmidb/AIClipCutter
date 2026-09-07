@@ -3,6 +3,8 @@ display_name: "TEDx Glenbeigh 2027"
 target_platform: "instagram_reels"
 gemini_model: "gemini-3.8-flash"  # Active model for viral moment detection
 
+temperature: 0.75
+
 # Clip Constraints
 clips_per_video: 6
 min_duration_seconds: 10
@@ -30,8 +32,6 @@ hashtags:
   - "#LifeLessons"
   - "#TEDTalks"
   - "#MindsetShift"
-  - "#ViralReels"
-  - "#ReelsInstagram"
 
 # Gemini Moment Detection Prompt
 gemini_prompt: |
@@ -51,27 +51,28 @@ gemini_prompt: |
   3. LOOPING POTENTIAL: The ending must cleanly transition back or leave the viewer wanting to re-watch.
   4. STRICT DURATION: Each clip MUST be between {min_duration} and {max_duration} seconds (ideal: 12-16 seconds).
 
-  CAPTION GUIDELINES:
-  - Open with a compelling 1-2 sentence hook highlighting the core insight of this clip.
-  - Specifically mention speaker {speaker_name} by name.
-  - Include the exact speaker credit and YouTube link:
-    🗣️ Speaker: {speaker_name}
-    🔗 Watch the full talk: {full_video_url}
-  - Include the community follow invitation:
-    ✨ Follow @TEDxGlenbeigh for more inspiring TEDx talks and world-class ideas straight from Glenbeigh, in Co. Kerry! ☘️
+  HIGH CREATIVITY & ANTI-FATIGUE MANDATE:
+  Every single post caption must have a distinct angle and structure. DO NOT use repetitive boilerplate!
+  Assign each clip one of the following 5 content angles:
+  - Angle 1 (The Contrarian Take): Challenge a widespread belief or conventional wisdom.
+  - Angle 2 (The Tactical Framework): A clear, actionable shift or lesson the viewer can apply today.
+  - Angle 3 (The Personal Epiphany): An emotional, relatable moment of vulnerability or breakthrough.
+  - Angle 4 (The Debate / Thought Provoker): A profound question urging viewers to reflect and comment.
+  - Angle 5 (The Minimalist Soundbite): Laser-focused, poetic 2-line quote that leaves a lasting impression.
 
   OUTPUT FORMAT (Strict JSON Array):
   [
     {
       "clip_index": 1,
+      "content_angle": "The Contrarian Take",
       "start_time": 124.5,
       "end_time": 139.2,
       "duration": 14.7,
       "virality_score": 95,
       "hook_banner": "THE LIE ABOUT SUCCESS NO ONE ADMITS",
       "spoken_opening": "First words spoken in this clip...",
-      "instagram_caption": "What if everything you were told about success was backwards? 🤔 In this powerful moment, speaker {speaker_name} challenges conventional wisdom.\n\n🗣️ Speaker: {speaker_name}\n🔗 Watch the full talk: {full_video_url}\n\n✨ Follow @TEDxGlenbeigh for more inspiring TEDx talks and world-class ideas straight from Glenbeigh, in Co. Kerry! ☘️",
-      "hashtags": ["#TEDxGlenbeigh", "#TEDx", "#Glenbeigh", "#Kerry", "#Ireland", "#IdeasWorthSpreading"]
+      "instagram_caption": "What if everything you were told about burnout was backwards? In this provocative moment from TEDx Glenbeigh, speaker {speaker_name} breaks down why rest isn't a reward—it's preventative maintenance.\n\nSave this for your next frantic work day.",
+      "hashtags": ["#TEDxGlenbeigh", "#TEDx", "#MindsetShift", "#PersonalGrowth", "#IdeasWorthSpreading"]
     }
   ]
 

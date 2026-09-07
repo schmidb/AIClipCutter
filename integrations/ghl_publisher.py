@@ -19,8 +19,8 @@ def resolve_speaker_and_url(clip: Dict[str, Any]) -> tuple[str, str]:
     if speaker and full_url:
         return speaker, full_url
 
-    # Check playlist files in config
-    playlist_files = [Path("config/playlist_markus.json"), Path("config/playlist_tedx.json")]
+    # Check all playlist files in config
+    playlist_files = list(Path("config").glob("playlist_*.json"))
     for playlist_path in playlist_files:
         if playlist_path.exists():
             try:
@@ -48,14 +48,15 @@ def build_instagram_post_content(
     caption_text: str,
     speaker: str = "",
     full_video_url: str = "",
-    hashtags: list = None
+    hashtags: list = None,
+    index: int = 0
 ) -> str:
     """
-    Constructs an Instagram Reel caption:
+    Constructs a creative, dynamic Instagram Reel caption:
     1. Hook & core insight (personalizes generic references with real speaker name)
     2. Speaker attribution
-    3. Full talk YouTube link
-    4. Follow invitation for @TEDxGlenbeigh (Glenbeigh, Co. Kerry)
+    3. Full talk/keynote YouTube link
+    4. Dynamically rotating CTA (save, share, follow, question, or bio link to prevent audience fatigue)
     5. Clean spacing with high-retention hashtags
     """
     body = caption_text.strip()
@@ -65,7 +66,6 @@ def build_instagram_post_content(
 
     # Extract any hashtags embedded anywhere in the body text
     embedded_tags = re.findall(r"#\w+", body)
-    # Remove the hashtags from the body text
     body_no_tags = re.sub(r"#\w+\s*", "", body).strip()
 
     # Separate lines and clean up whitespace
@@ -75,7 +75,7 @@ def build_instagram_post_content(
         if not line_clean:
             continue
         # If line is already a CTA, we will rebuild it cleanly
-        if "Follow @" in line_clean or "Watch the full talk" in line_clean or "Speaker:" in line_clean:
+        if "Follow @" in line_clean or "Watch the full" in line_clean or "Speaker:" in line_clean or "Bookmark " in line_clean:
             continue
         lines.append(line_clean)
 
@@ -88,17 +88,36 @@ def build_instagram_post_content(
     if full_video_url:
         cta_lines.append(f"🔗 Watch the full talk: {full_video_url}")
     
-    # Community & event follow CTA
-    cta_lines.append(
-        "✨ Follow @TEDxGlenbeigh for more inspiring TEDx talks and world-class ideas straight from Glenbeigh, in Co. Kerry! ☘️"
-    )
+    # Check if speaker is Miriam Schmidberger / Greator
+    is_miriam = "miriam" in speaker.lower() if speaker else False
 
-    # Curated Hashtags
-    default_tags = ["#TEDxGlenbeigh", "#TEDx", "#Glenbeigh", "#Kerry", "#Ireland", "#IdeasWorthSpreading"]
-    if speaker and speaker.lower() != "tedx speaker":
+    if is_miriam:
+        # Rotating CTAs for Miriam Schmidberger & Greator
+        miriam_ctas = [
+            "📌 Bookmark this reel for your morning routine or whenever you need clarity on your journey.",
+            "✈️ Share this with someone who is ready to step out of the rat race and find their true 'Why'.",
+            "🔗 Watch Miriam Schmidberger's full keynote from the Greator Festival via the link in bio!",
+            "✨ Follow @miriam.schmidberger for more insights on purposeful living, authentic transformation, and mindset.",
+            "💬 What part of your 'Why' are you stepping into today? Drop your thoughts below 👇"
+        ]
+        cta_lines.append(miriam_ctas[index % len(miriam_ctas)])
+        default_tags = ["#MiriamSchmidberger", "#GreatorFestival", "#Greator", "#KnowYourWhy", "#PersonalGrowth", "#MindsetShift", "#Transformation"]
+    else:
+        # Rotating CTAs for TEDx Glenbeigh
+        tedx_ctas = [
+            "📌 Bookmark this reel whenever you need a mindful reset during a hectic work week.",
+            "✈️ Send this to someone who needs to hear this reminder today 🌿",
+            f"🔗 Watch {speaker}'s full 12-minute talk from TEDx Glenbeigh via the link in bio!",
+            "✨ Follow @TEDxGlenbeigh for more inspiring TEDx talks and world-class ideas straight from Glenbeigh, in Co. Kerry! ☘️",
+            "💬 Does this change how you think about your daily routine? Let us know below 👇"
+        ]
+        cta_lines.append(tedx_ctas[index % len(tedx_ctas)])
+        default_tags = ["#TEDxGlenbeigh", "#TEDx", "#Glenbeigh", "#Kerry", "#Ireland", "#IdeasWorthSpreading"]
+
+    if speaker and speaker.lower() not in ["tedx speaker", "speaker"]:
         speaker_tag = "#" + re.sub(r"[^a-zA-Z0-9]", "", speaker)
         if speaker_tag not in default_tags:
-            default_tags.insert(2, speaker_tag)
+            default_tags.insert(1, speaker_tag)
 
     combined_tags = []
     all_input_tags = (hashtags or []) + embedded_tags
@@ -125,18 +144,18 @@ def build_linkedin_post_content(
     caption_text: str,
     speaker: str = "",
     full_video_url: str = "",
-    hashtags: list = None
+    hashtags: list = None,
+    index: int = 0
 ) -> str:
     """
     Constructs a high-impact LinkedIn post:
     1. Hook & core thought-leadership insight
     2. Speaker attribution: 🎙️ Speaker: {speaker}
     3. Full episode/interview link: 🔗 Listen to the full story / interview: {full_video_url}
-    4. Call to Action: 💼 Follow Markus on LinkedIn for actionable enterprise AI strategies & executive leadership insights!
+    4. Dynamically rotating LinkedIn CTA (comment debate, repost, full link, follow, or save)
     5. Clean, professional hashtags
     """
     body = caption_text.strip()
-    # Extract any hashtags embedded anywhere in the body text
     embedded_tags = re.findall(r"#\w+", body)
     body_no_tags = re.sub(r"#\w+\s*", "", body).strip()
 
@@ -145,7 +164,7 @@ def build_linkedin_post_content(
         line_clean = line.strip()
         if not line_clean:
             continue
-        if "Follow " in line_clean or "Listen to the full" in line_clean or "Watch the full" in line_clean or "Speaker:" in line_clean:
+        if "Follow " in line_clean or "Listen to the full" in line_clean or "Watch the full" in line_clean or "Speaker:" in line_clean or "Repost " in line_clean:
             continue
         lines.append(line_clean)
 
@@ -157,9 +176,15 @@ def build_linkedin_post_content(
     if full_video_url:
         cta_lines.append(f"🔗 Listen to the full story / interview: {full_video_url}")
 
-    cta_lines.append(
-        "💼 Follow Markus Schmidberger on LinkedIn for actionable enterprise AI strategies, data architectures, and executive leadership insights!"
-    )
+    # Rotating CTAs for LinkedIn
+    linkedin_ctas = [
+        "💬 Where does your organization stand on this? Share your perspective in the comments below.",
+        "♻️ Repost this to your network if you believe more enterprise leaders need this reality check.",
+        "🎙️ Listen to Dr. Markus Schmidberger's full architectural breakdown at the link below.",
+        "💼 Follow Dr. Markus Schmidberger on LinkedIn for actionable, hype-free enterprise AI and data leadership.",
+        "📌 Save this post for your next executive AI strategy alignment meeting."
+    ]
+    cta_lines.append(linkedin_ctas[index % len(linkedin_ctas)])
 
     default_tags = ["#ArtificialIntelligence", "#AIStrategy", "#EnterpriseAI", "#Leadership", "#DigitalTransformation", "#MarkusSchmidberger"]
     combined_tags = []
@@ -224,14 +249,16 @@ def format_ghl_csv(
                 caption_text=caption_text,
                 speaker=speaker or "Dr. Markus Schmidberger",
                 full_video_url=full_url,
-                hashtags=hashtags
+                hashtags=hashtags,
+                index=i
             )
         else:
             full_content = build_instagram_post_content(
                 caption_text=caption_text,
                 speaker=speaker,
                 full_video_url=full_url,
-                hashtags=hashtags
+                hashtags=hashtags,
+                index=i
             )
         
         media_url = clip.get("media_url", "")

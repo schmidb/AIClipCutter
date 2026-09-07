@@ -43,7 +43,7 @@ def extract_video_id(url: str) -> str:
 def get_video_info(url_or_id: str) -> dict:
     """Resolves speaker, title, and YouTube URL from config playlists if available."""
     video_id = extract_video_id(url_or_id)
-    playlist_files = [Path("config/playlist_markus.json"), Path("config/playlist_tedx.json")]
+    playlist_files = list(Path("config").glob("playlist_*.json"))
     for playlist_path in playlist_files:
         if playlist_path.exists():
             try:
@@ -55,7 +55,7 @@ def get_video_info(url_or_id: str) -> dict:
                             return {
                                 "id": v.get("id"),
                                 "title": v.get("title", f"Video ({video_id})"),
-                                "speaker": v.get("speaker", "Dr. Markus Schmidberger" if "markus" in str(playlist_path) else "Speaker"),
+                                "speaker": v.get("speaker", "Speaker"),
                                 "url": v.get("url", f"https://www.youtube.com/watch?v={video_id}")
                             }
             except Exception:
@@ -320,18 +320,24 @@ def process_single_video(
     platform: str = None
 ) -> list:
     """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
-    if preset in ["tedx", "linkedin"]:
-        preset = f"config/{preset}.yaml"
-
-    target_platform = platform or ("LinkedIn" if "linkedin" in preset.lower() else "Instagram")
     video_id = extract_video_id(url)
-    work_dir = Path("output") / video_id
-    work_dir.mkdir(parents=True, exist_ok=True)
-
     vinfo = get_video_info(url)
     speaker_name = speaker or vinfo.get("speaker", "")
     full_video_url = vinfo.get("url", url)
     display_title = video_title or vinfo.get("title", f"Video ({video_id})")
+
+    if preset in ["tedx", "linkedin", "miriam"]:
+        preset = f"config/{preset}.yaml"
+
+    if preset == "config/tedx.yaml":
+        if "miriam" in speaker_name.lower() or "qRqt7_W37J4" in url:
+            preset = "config/miriam.yaml"
+        elif "markus" in speaker_name.lower():
+            preset = "config/linkedin.yaml"
+
+    target_platform = platform or ("LinkedIn" if "linkedin" in preset.lower() else "Instagram")
+    work_dir = Path("output") / video_id
+    work_dir.mkdir(parents=True, exist_ok=True)
 
     print("\n" + "=" * 70)
     print(f"🎬 AIClipCutter — Single Video Mode")

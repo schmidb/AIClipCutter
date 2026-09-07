@@ -60,12 +60,13 @@ def extract_viral_moments(
     speaker_log = f" for '{speaker_name}'" if speaker_name else ""
     print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}){speaker_log} for {num_clips} clips ({min_dur}-{max_dur}s)...")
     
+    temp_to_use = float(preset_config.get("temperature", 0.75))
     response = client.models.generate_content(
         model=model_to_use,
         contents=full_request,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.3
+            temperature=temp_to_use
         )
     )
 
