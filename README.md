@@ -1,79 +1,103 @@
 # AIClipCutter 🎬⚡
 > **Autonomous Long-to-Short Video Repurposing Pipeline powered by Google Cloud & AI**
 
-AIClipCutter transforms 10–15 minute long-form YouTube videos into high-retention, viral 10–20 second clips formatted and scheduled directly for **Instagram Reels** and **LinkedIn** via **GoHighLevel (GHL)**.
+AIClipCutter transforms 10–20 minute long-form YouTube videos into high-retention, viral 10–20 second vertical clips formatted and scheduled directly for **Instagram Reels** and **LinkedIn** via **GoHighLevel (GHL)**.
 
 ---
 
-## 🎯 Target Use Cases
+## 🎯 Target Campaigns
 
 ### 1. TEDx Glenbeigh 2027 (Instagram Reels / TikTok)
-* **Objective:** Extract the most provocative, inspiring, and mind-bending soundbites from TEDx Glenbeigh talks to hype the **TEDx Glenbeigh 2027** event.
-* **Format:** 9:16 vertical video with smooth stage tracking (following the speaker on the red dot).
+* **Objective:** Extract provocative, inspiring soundbites from TEDx Glenbeigh talks to hype the **TEDx Glenbeigh 2027** event.
+* **Format:** 9:16 vertical video with dynamic speaker tracking and camera shot reframing.
 * **Styling:** Kinetic karaoke subtitles (Hormozi style) + hook banner headline across the first 3 seconds.
-* **Copy & CTA:** Inspiring caption + call-to-action driving registrations to the TEDx Glenbeigh 2027 waitlist/tickets + high-reach hashtags.
+* **Copy & CTA:** Inspiring post copy + call-to-action driving registrations to the TEDx Glenbeigh 2027 ticket waitlist + viral hashtags.
+* **Preset:** `config/tedx.yaml`
 
-### 2. Markus's Podcasts & Keynotes (LinkedIn)
+### 2. Markus Schmidberger's Keynotes & Podcasts (LinkedIn)
 * **Objective:** Extract tactical business frameworks, contrarian leadership opinions, and executive takeaways.
-* **Format:** 9:16 vertical or 4:5 portrait with active speaker tracking or split-screen podcast layouts.
-* **Styling:** Clean, modern typography without distracting clutter.
-* **Copy & CTA:** Thought-leadership scannable format (short 1-line paragraphs, strong opening hook, open discussion question, and 3–5 targeted industry tags).
+* **Format:** 9:16 vertical video with speaker tracking or split-screen layouts.
+* **Styling:** Clean, modern typography without clutter.
+* **Copy & CTA:** Thought-leadership scannable format with 1-line paragraphs, an open discussion question, and professional tags.
+* **Preset:** `config/linkedin.yaml`
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture & How It Works
+
+AIClipCutter runs an ultra-fast, native Python pipeline powered by **Google Gemini 3.8 Flash** via Vertex AI and **FFmpeg**:
 
 ```
-                      [ YouTube URLs / Local MP4s ]
-                                   │
-                                   ▼
-                   ┌──────────────────────────────┐
-                   │    Google Cloud Engine VM    │
-                   │    (NVIDIA GPU + Credits)    │
-                   └──────────────┬───────────────┘
-                                  │
-         ┌────────────────────────┼────────────────────────┐
-         │                        │                        │
-         ▼                        ▼                        ▼
-┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│  faster-whisper │      │ Google Vertex AI│      │   MediaPipe /   │
-│  (Word-level    │      │  Gemini 2.5/3   │      │     YOLOv8      │
-│  Timestamps)    │      │ (Viral Moments) │      │  (Face Track)   │
-└────────┬────────┘      └────────┬────────┘      └────────┬────────┘
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-                                  ▼
-                   ┌──────────────────────────────┐
-                   │       FFmpeg Compositor      │
-                   │  (9:16 Crop + ASS Subtitles  │
-                   │   + Hook V2 Glitch Teasers)  │
-                   └──────────────┬───────────────┘
-                                  │
-                                  ▼
-                   ┌──────────────────────────────┐
-                   │   Cloud Storage & GHL Sync   │
-                   └──────────────┬───────────────┘
-                                  │
-                   ┌──────────────┴───────────────┐
-                   ▼                              ▼
-        [ Google Drive / GCS ]        [ GoHighLevel Social Planner ]
-       (Backup & Mobile Review)       (Drip-scheduled 30–60 Day Queue)
-                                                  │
-                                                  ▼
-                                       [ Auto-Publish to IG & IN ]
+                       [ Long-Form YouTube Video ]
+                                    │
+                                    ▼
+                     yt-dlp (Video & VTT Auto-Captions)
+                                    │
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   🧠 Step 1: AI Moment Hunter (Google Gemini 3.8 Flash) │
+       │   • Evaluates virality (0-100 score)                   │
+       │   • Enforces 10-20s duration constraint                │
+       │   • Assigns distinct creative content angles           │
+       │   • Generates platform-tailored captions & CTAs        │
+       └────────────────────────────┬───────────────────────────┘
+                                    │
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   ⏱️ Step 2: Speech-Onset Snapping (core/subtitles.py)   │
+       │   • Snaps LLM timestamps to exact VTT speech onset     │
+       │   • Adds +0.35s acoustic pre-roll room-tone cushion    │
+       │   • Completely eliminates truncated initial words      │
+       └────────────────────────────┬───────────────────────────┘
+                                    │
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   🎯 Step 3: Smart Auto-Framing (core/compositor.py)   │
+       │   • Samples frames across clip into Gemini Flash Vision│
+       │   • Generates speaker trajectory cx(t)                 │
+       │   • Instant cut on camera shot switches                │
+       │   • Smoothstep easing (3p²-2p³) for pacing/walking     │
+       └────────────────────────────┬───────────────────────────┘
+                                    │
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   ✂️ Step 4: Video Compositor (FFmpeg)                 │
+       │   • 9:16 crop + dynamic translation filter             │
+       │   • Hormozi-style .ASS kinetic karaoke subtitles       │
+       │   • Top hook headline banner                           │
+       │   • 80ms broadcast audio fade-in & -14 LUFS loudness   │
+       └────────────────────────────┬───────────────────────────┘
+                                    │
+                                    ▼
+       ┌────────────────────────────────────────────────────────┐
+       │   📅 Step 5: GoHighLevel Publishing (ghl_publisher.py) │
+       │   • Mixed round-robin speaker schedule (anti-fatigue)  │
+       │   • Prepares master folder: output/ghl_master_clips/   │
+       │   • Generates GHL-ready CSV & metadata review report   │
+       └────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ⚡ Tech Stack & Credits Utilization
+## ⚡ Key Engineering Features
 
-* **AI Reasoning:** **Google Gemini 2.5 / 3.0** via Vertex AI API (identifies high-impact 10–20s moments, writes tailored copy, formats hooks).
-* **Compute & Rendering:** **Google Compute Engine (GCE)** GPU VM (`g2-standard-4` with NVIDIA L4 or `n1-standard-4` with T4 GPU) — 100% funded with Google Cloud credits.
-* **Speech-to-Text:** `faster-whisper` (CUDA-accelerated word-level alignment).
-* **Vision & Re-framing:** Google MediaPipe BlazeFace / YOLOv8 for speaker centering.
-* **Compositor:** FFmpeg with NVENC hardware acceleration.
-* **Distribution:** GoHighLevel Social Planner API / CSV Bulk Scheduler + Google Drive backup.
+### 1. Smart Multi-Point Auto-Framing ([`core/compositor.py`](file:///c:/GitDev/AIClipCutter/core/compositor.py))
+- Resolves the issue where speakers walk across the stage or camera angle changes push the speaker off-screen.
+- Uses Gemini 3.8 Flash Vision to track the speaker's horizontal center $c_x(t)$ across 5–7 sampled frames.
+- **Deadzone Filter ($\pm 6\%$)**: Small movements keep the camera 100% static to prevent jitter.
+- **Director Cut Detection**: Sudden changes ($\ge 0.12$) trigger an instantaneous broadcast cut.
+- **Stage Walking Easing**: Gradual movement uses cubic Hermite smoothstep easing over 1.2s.
+
+### 2. Speech-Onset Snapping & Acoustic Cushions ([`core/subtitles.py`](file:///c:/GitDev/AIClipCutter/core/subtitles.py))
+- Eliminates clipped first words and transient pops.
+- Matches Gemini's `spoken_opening` against true VTT word cues to find exact phonetic onset.
+- Applies a `0.35s` room-tone pre-roll cushion (clamped to prior sentence end) and `0.35s` lead-out.
+- Applies an 80ms audio micro-fade-in (`afade=t=in:st=0:d=0.08`).
+
+### 3. Campaign Calendar Scheduling & Interleaving ([`integrations/ghl_publisher.py`](file:///c:/GitDev/AIClipCutter/integrations/ghl_publisher.py))
+- Automatically interleaves speakers in a round-robin rotation to avoid audience fatigue.
+- Generates [`output/ghl_master_playlist_schedule.csv`](file:///c:/GitDev/AIClipCutter/output/ghl_master_playlist_schedule.csv) ready for direct CSV upload into **GoHighLevel > Marketing > Social Planner**.
+- Compiles [`output/clips_metadata_report.csv`](file:///c:/GitDev/AIClipCutter/output/clips_metadata_report.csv) linking virality scores, hooks, captions, and file paths.
 
 ---
 
@@ -81,40 +105,59 @@ AIClipCutter transforms 10–15 minute long-form YouTube videos into high-retent
 
 ```
 AIClipCutter/
-├── README.md               # Project overview & quickstart
-├── PROJECT_PLAN.md         # Detailed phased execution roadmap
-├── implementation_plan.md  # Architectural specification
-├── run_batch.py            # Master CLI orchestrator
-├── config/
-│   ├── tedx.yaml           # TEDx Glenbeigh 2027 prompt & subtitle preset
-│   ├── linkedin.yaml       # Markus LinkedIn prompt & styling preset
-│   ├── playlist_tedx.json  # Catalog of all 8 TEDx Glenbeigh talks
-│   └── gcp_service_account_key.json  # GCP Service Account (gitignored)
-├── engine/                 # Core engine (powered by NaufalRizqullah/opensource-clipping)
-│   ├── main.py             # OpenSource-clipping CLI entrypoint
-│   ├── clipping/           # Face tracking, Hormozi .ASS subtitles, FFmpeg compositing
-│   └── requirements.txt    # Engine dependencies (faster-whisper, mediapipe, ultralytics, etc.)
+├── README.md                      # Project documentation (this file)
+├── PROJECT_PLAN.md                # Comprehensive roadmap & architecture
+├── run_single.py                  # Single video CLI runner
+├── run_batch.py                   # Batch playlist orchestrator & GHL mixer
 ├── core/
-│   └── gemini_extractor.py # Vertex AI Gemini highlight extractor
+│   ├── gemini_extractor.py        # Gemini 3.8 Flash viral moment detection
+│   ├── subtitles.py               # VTT speech snapping & .ASS subtitle generator
+│   └── compositor.py              # Smart auto-framing & FFmpeg video compositor
 ├── integrations/
-│   └── ghl_publisher.py    # GoHighLevel Social Planner CSV generator
-└── scripts/
-    ├── setup_gcp_vm.sh     # Automation script to bootstrap GCE GPU VM
-    └── launch_batch_vm.py  # On-demand GCP VM launcher
+│   └── ghl_publisher.py           # GoHighLevel Social Planner scheduler
+├── config/
+│   ├── tedx.yaml                  # TEDx Glenbeigh prompt, styling & hashtags
+│   ├── linkedin.yaml              # LinkedIn thought-leadership preset
+│   ├── playlist_tedx.json         # TEDx Glenbeigh talks catalog
+│   └── playlist_markus.json       # Markus Schmidberger video catalog
+├── output/
+│   ├── ghl_master_clips/          # Sequentially numbered MP4 clips & JPG covers
+│   ├── ghl_master_playlist_schedule.csv # GoHighLevel Social Planner upload CSV
+│   └── clips_metadata_report.csv  # Detailed tracking and review report
+└── engine/                        # (Optional) Legacy opensource-clipping engine
 ```
+
+> **Note on `/engine`**: `/engine` contains a clone of `opensource-clipping` intended for offline GPU VMs running local Faster-Whisper. The active, production pipeline is the **Native Pipeline** inside `core/`.
 
 ---
 
-## 🚀 Quick Usage (CLI)
+## 🚀 Usage Guide
 
+### 1. Process a Single Video
 ```bash
-# Process TEDx Glenbeigh video (6 clips, 10-20s, IG Reels formatting)
-python run_batch.py --url "https://youtube.com/watch?v=TEDX_ID" --preset tedx --clips 6
+# Run full pipeline for a TEDx talk
+python run_single.py --url "https://www.youtube.com/watch?v=8pUxo0CZw5w" --preset config/tedx.yaml
 
-# Process Markus podcast (5 clips, LinkedIn formatting)
-python run_batch.py --url "https://youtube.com/watch?v=PODCAST_ID" --preset linkedin --clips 5 --split-screen
-
-# Batch process from a list of URLs and export to GoHighLevel
-python run_batch.py --file urls.txt --export-ghl
+# Re-render clips with updated framing or timing
+python run_single.py --url "https://www.youtube.com/watch?v=8pUxo0CZw5w" --step render --force
 ```
 
+### 2. Batch Process a Playlist & Create Master GHL Schedule
+```bash
+# Process TEDx Glenbeigh talks playlist
+python run_batch.py --playlist config/playlist_tedx.json --preset config/tedx.yaml
+
+# Process with custom virality threshold (e.g. >= 88%)
+python run_batch.py --playlist config/playlist_tedx.json --preset config/tedx.yaml --min-virality 88
+
+# Process Markus Schmidberger LinkedIn playlist
+python run_batch.py --playlist config/playlist_markus.json --preset config/linkedin.yaml
+```
+
+### 3. Pipeline Steps (`--step`)
+You can execute individual steps using `--step`:
+- `download`: Download source video and auto-captions via `yt-dlp`.
+- `moments`: Query Gemini 3.8 Flash to find viral moments (`moments.json`).
+- `render`: Cut, reframing, subtitles, and FFmpeg video rendering.
+- `ghl`: Generate GoHighLevel Social Planner CSV.
+- `all`: Execute the complete end-to-end pipeline (default).

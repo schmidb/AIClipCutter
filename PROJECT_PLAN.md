@@ -1,113 +1,103 @@
-# AIClipCutter — Comprehensive Implementation Plan & Architecture
+# AIClipCutter — Master Architecture & Project Roadmap
 
-This document outlines the end-to-end plan to build and deploy **AIClipCutter**, turning 10–15 minute YouTube videos into 10–20 second viral clips for **TEDx Glenbeigh 2027** (Instagram Reels) and **Markus's Keynotes/Podcasts** (LinkedIn), automated with **GoHighLevel (GHL)** and powered by **Google Cloud credits**.
-
----
-
-## 1. Project Objectives & Metrics
-
-| Metric | Target |
-| :--- | :--- |
-| **Input** | ~10 long-form YouTube videos (10–15 min each) |
-| **Output Volume** | 5–7 clips per video (Total: 50–70 clips) |
-| **Clip Duration** | Strictly 10–20 seconds (optimized for >100% loop completion rate) |
-| **Aspect Ratios** | 9:16 (Instagram Reels & LinkedIn Mobile Video) or 4:5 (LinkedIn Feed) |
-| **Cost to Run** | $0 out-of-pocket (100% funded via Google Cloud credits) |
-| **Publishing Destination** | GoHighLevel Social Planner (automated calendar drip) + Google Drive |
+> **Autonomous Long-to-Short Video Repurposing Pipeline**  
+> Transforms 10–20 minute YouTube videos into viral, high-retention 10–20 second vertical clips for **Instagram Reels** and **LinkedIn**, formatted and scheduled directly for **GoHighLevel (GHL) Social Planner**.
 
 ---
 
-## 2. Platform Preset Specifications
+## 1. Executive Summary & Architecture Clarification
 
-### A. Preset: `tedx` (Instagram Reels / TikTok)
-* **Goal:** Create buzz, build audience anticipation, and drive ticket waitlist signups for **TEDx Glenbeigh 2027**.
-* **Detection Criteria (Gemini Prompt):**
-  * Mind-bending, counter-intuitive statements or epiphanies.
-  * Emotionally charged stories with a self-contained 10–20s punchline.
-  * Spoken words that start immediately with zero dead intro.
-* **Visual Framing:**
-  * 9:16 full-bleed vertical crop.
-  * Smooth stage tracking (centering the speaker as they pace the TEDx red dot).
-  * 3-second hook text banner at the top of the screen (e.g. *"Why 99% of people quit..."*).
-* **Subtitle Styling:**
-  * Kinetic dynamic karaoke (`.ass` format), Hormozi-style (bright yellow/green word highlights, bold font with drop shadow).
-* **Social Copy Output:**
-  * Hook line + 2-sentence emotional takeaway.
-  * CTA: *"🎟️ TEDx Glenbeigh returns in 2027. Don't miss the talks that will shape the future. Tap the link in bio to join the priority ticket waitlist!"*
-  * 12–15 high-reach hashtags (`#TEDx #TEDxGlenbeigh #IdeasWorthSpreading #Glenbeigh2027 ...`).
+The repository currently contains two distinct architectures:
 
-### B. Preset: `linkedin` (Markus's Keynotes & Podcasts)
-* **Goal:** Thought leadership, executive networking, and engagement on Markus's LinkedIn profile.
-* **Detection Criteria (Gemini Prompt):**
-  * Practical business frameworks, leadership decisions, scaling lessons, or contrarian industry insights.
-* **Visual Framing:**
-  * Solo talk: 9:16 full vertical or 4:5 portrait.
-  * Multi-speaker / Podcast: Dynamic split-screen (top/bottom) or camera-switching focused on the active speaker.
-* **Subtitle Styling:**
-  * Clean, minimal modern typography (white text, subtle box background or crisp outline, zero cartoonish animations).
-* **Social Copy Output:**
-  * Strong one-line hook headline.
-  * Short, scannable paragraphs with plenty of white space.
-  * Open-ended question at the end to stimulate comments and debate in the LinkedIn algorithm.
-  * 3–5 targeted industry hashtags (`#Leadership #BusinessStrategy #ExecutiveCoaching ...`).
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        AIClipCutter Architecture                       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+       ┌────────────────────────────┴────────────────────────────┐
+       ▼                                                         ▼
+┌───────────────────────────────────────┐       ┌───────────────────────────────────────┐
+│     Native Lightweight Pipeline       │       │         Legacy Cloud Engine           │
+│         (ACTIVE / DEFAULT)            │       │       (OPTIONAL / INACTIVE)           │
+│                                       │       │                                       │
+│ • run_single.py & run_batch.py        │       │ • engine/ (opensource-clipping)       │
+│ • core/gemini_extractor.py (Gemini 3.8)│      │ • Requires heavy CUDA, PyTorch, C++   │
+│ • core/compositor.py (Smart Framing)  │       │ • Local Faster-Whisper transcription  │
+│ • core/subtitles.py (Acoustic Snapping│       │ • Local MediaPipe / YOLO face detector│
+│ • integrations/ghl_publisher.py       │       │ • Kept only for GPU VM batch runs     │
+│ • Ultra-fast (10-15s render on PC)    │       │                                       │
+└───────────────────────────────────────┘       └───────────────────────────────────────┘
+```
+
+### Are we using `/engine`?
+- **No.** The entire working production pipeline uses the **Native Pipeline** (`core/`, `run_single.py`, `run_batch.py`).
+- `/engine` is a clone of `NaufalRizqullah/opensource-clipping`. It is a heavy, monolithic module requiring local CUDA builds, Faster-Whisper, and local MediaPipe/YOLO models.
+- The only reference to `/engine` is in `run_clip_engine_cloud()` in `run_batch.py`, which is only triggered if someone explicitly passes `--mode cloud`.
+- For standard local processing (`--mode local`, the default), `/engine` is **completely bypassed**.
 
 ---
 
-## 3. Google Cloud Architecture (Using Credits)
+## 2. Production Tech Stack (Native Pipeline)
 
-### A. Compute: GCE GPU VM
-* **Machine Type:** `g2-standard-4` (equipped with 1x NVIDIA L4 GPU, 16 GB VRAM, 4 vCPUs, 16 GB RAM) or `n1-standard-4` (with NVIDIA T4 GPU).
-* **Role:**
-  * GPU-accelerated video download (`yt-dlp`).
-  * GPU-accelerated speech-to-text (`faster-whisper` large-v3 via CUDA).
-  * GPU-accelerated face detection (`MediaPipe` / `YOLOv8`).
-  * GPU-accelerated video rendering & subtitle burning (`FFmpeg` using NVENC `h264_nvenc`).
-* **Cost Efficiency:** A single 15-minute video processes in ~2–3 minutes on an L4 GPU. Processing all 10 videos will take under 45 minutes of VM runtime, consuming just a few dollars of your cloud credits.
-
-### B. Intelligence: Google Vertex AI (Gemini 3.8 Flash)
-* Gemini analyzes full transcripts with word timestamps.
-* Generates structured JSON output with exact timestamps, hook headlines, virality scores, and platform-specific post descriptions.
-
-### C. Storage & Delivery: Google Cloud Storage (GCS)
-* Processed MP4 clips and metadata files are stored in a regional GCS bucket.
-* Direct public or signed URLs are generated for ingestion into GoHighLevel.
+| Component | Technology | Role |
+| :--- | :--- | :--- |
+| **Moment Hunter** | **Google Gemini 3.8 Flash** (Vertex AI) | Scans video transcript, scores virality (0–100), selects 10–20s moments, writes tailored captions. |
+| **Speech Alignment** | **VTT Cue Parser + Pre-Roll Cushion** | Snaps LLM timestamps to exact syllable start + adds `0.35s` room-tone cushion to avoid truncated words. |
+| **Auto-Framing** | **Gemini 3.8 Flash Multimodal Vision** | Samples 5–7 frames across clip, tracks speaker horizontal center $c_x(t)$, applies cinematic easing. |
+| **Video Compositor** | **FFmpeg (Native Windows/Linux)** | 9:16 vertical crop, Hormozi-style `.ass` karaoke subtitles, 3s hook banner, 80ms audio micro-fade-in. |
+| **Social Automation** | **GoHighLevel Social Planner Engine** | Auto-spaces posts, interleaves speakers (round-robin), formats captions, CTAs, and hashtags. |
 
 ---
 
-## 4. GoHighLevel (GHL) Publishing Pipeline
+## 3. Key Completed Milestones
 
-### Workflow:
-1. When clips are exported, the system generates:
-   * `clip_01.mp4`, `clip_02.mp4`... uploaded to GCS.
-   * `clip_metadata.json` containing the post text, media URL, and target platform.
-   * `ghl_social_planner.csv` formatted according to GoHighLevel's CSV upload specification.
-2. **Option A (Bulk CSV Upload):**
-   * Download `ghl_social_planner.csv`.
-   * In GoHighLevel: Navigate to **Marketing > Social Planner > CSV Upload**.
-   * Map columns and schedule 50–70 posts across Instagram and LinkedIn over the next 30–60 days in one click.
-3. **Option B (Direct REST API):**
-   * Configure `GHL_API_KEY` and `GHL_LOCATION_ID`.
-   * Pipeline automatically creates posts directly inside GHL Social Planner as **Drafts** or **Scheduled Posts**, ready for one-click approval.
+- [x] **Acoustic Pre-Roll & Speech Snapping ([`core/subtitles.py`](file:///c:/GitDev/AIClipCutter/core/subtitles.py))**:
+  - Eliminated hard audio cuts where first words were chopped in half.
+  - Added `0.35s` room-tone lead-in and `0.35s` decay lead-out clamped to prior cue boundaries.
+  - Added 80ms broadcast audio micro-fade-in (`afade=t=in:st=0:d=0.08`) and -14 LUFS loudness normalization.
+
+- [x] **Smart Multi-Point Auto-Framing ([`core/compositor.py`](file:///c:/GitDev/AIClipCutter/core/compositor.py))**:
+  - Eliminated issue where speakers paced out of the vertical frame or camera angles switched.
+  - Multi-frame trajectory extraction via Gemini 3.8 Flash multimodal vision.
+  - Deadzone filtering ($\pm 6\%$) prevents camera jitter.
+  - Instant cut on camera shot switches ($\ge 0.12$ jump) and smoothstep S-curve ($3p^2 - 2p^3$) on stage walking.
+  - Minimum hold guardrail ($\ge 3.2\text{s}$) prevents hyperactive cuts.
+
+- [x] **GoHighLevel Campaign Scheduling & Interleaving ([`integrations/ghl_publisher.py`](file:///c:/GitDev/AIClipCutter/integrations/ghl_publisher.py))**:
+  - Round-robin speaker mixing across batch playlists to avoid audience fatigue.
+  - Calendar drip scheduling from Mid-September to Christmas (1 post/week every Tuesday at 6:00 PM).
+  - Exported standalone master folder ([`output/ghl_master_clips/`](file:///c:/GitDev/AIClipCutter/output/ghl_master_clips/)) with sequentially numbered clips and cover images.
+
+- [x] **Batch Pilot Processing (3 TEDx Talks Re-rendered)**:
+  - Roser Bosch (`8pUxo0CZw5w`): 5 clips re-rendered with smart auto-framing.
+  - Paul Byrne (`17ej8XgPpMs`): 5 clips re-rendered with smart auto-framing.
+  - Nikolina Tijardovic (`1uaAfRhwuAQ`): 5 clips re-rendered with smart auto-framing.
 
 ---
 
-## 5. Execution Roadmap
+## 4. Remaining Roadmap & Next Steps
 
-### Phase 1: Core Engine & Presets Customization
-- Clone and modularize the clipping engine (leveraging `NaufalRizqullah/opensource-clipping`).
-- Create `config/tedx.yaml` and `config/linkedin.yaml` containing the customized Gemini system prompts and subtitle styling parameters.
-- Enforce strict 10–20 second window constraint on the Gemini highlight extractor.
+### Phase 1: Complete TEDx Glenbeigh Playlist (5 Remaining Talks)
+Process remaining talks from `config/playlist_tedx.json`:
+1. `aWmH7t3sZbs` — Fiola Foley (*When Running Toward Yourself Is the Only Way Home*)
+2. `-m8jIhQyiDY` — Patrick McKeown (*From Breathless to Breathe Less*)
+3. `OKH_YOOEcdQ` — Miriam Schmidberger (*The Power of Giving Birth - to Yourself*)
+4. `SOjzpKAPTzw` — Kenneth Keavey (*What is the true cost of cheap food?*)
+5. `C7U9_rz6uyg` — Debbie Reynolds (*The data privacy revolution*)
 
-### Phase 2: GoHighLevel & Cloud Storage Integrations
-- Implement `integrations/gcs_uploader.py` to stream finished clips to a GCP bucket.
-- Implement `integrations/ghl_scheduler.py` to produce GHL-compliant CSVs and/or trigger the GHL Social Planner REST API.
+### Phase 2: Dr. Markus Schmidberger LinkedIn Video Campaign
+Process talks from `config/playlist_markus.json` using `--preset config/linkedin.yaml`:
+1. `8nvuz0TV7tw` — Dr. Markus Schmidberger (Video 1)
+2. `hvmkH2xUJ4k` — Dr. Markus Schmidberger (Video 2)
+3. `jIas2vGSn2Q` — Dr. Markus Schmidberger (Video 3)
+4. `BBdwxF5WKLQ` — Dr. Markus Schmidberger (Video 4)
 
-### Phase 3: GCP VM Setup & GPU Automation
-- Create `scripts/setup_gcp_vm.sh` with automated installation of NVIDIA drivers, CUDA, FFmpeg with NVENC, and Python dependencies.
-- Provide step-by-step instructions for launching the VM with Google Cloud credits via the Google Cloud Console or `gcloud` CLI.
+### Phase 3: Virality Uncapping (Optional Enhancement)
+- Allow variable clip counts driven purely by virality score ($\ge 88\%$) rather than capping at 5 creative angles.
 
-### Phase 4: Batch Processing & Pilot Testing
-- Test with 1 TEDx Glenbeigh talk and 1 Markus podcast talk.
-- Review clip selection, pacing, 10–20s duration, visual framing, and generated captions.
-- Run the full batch across all 10 videos and export the complete 60-post schedule into GoHighLevel.
+---
 
+## 5. Repository Maintenance Decision
+- **`PROJECT_PLAN.md`**: Maintained as the single, authoritative project plan and architecture document.
+- **`implementation_plan.md`**: Removed from the repository root to avoid duplicate and out-of-sync documentation.
+- **`/engine`**: Retained as an optional reference for legacy cloud VM batch runs, but ignored during local pipeline execution.
