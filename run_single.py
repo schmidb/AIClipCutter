@@ -137,6 +137,16 @@ def step_moments(
 
     moments_file = work_dir / "moments.json"
 
+    if moments_file.exists():
+        try:
+            with open(moments_file, "r", encoding="utf-8") as f:
+                cached_moments = json.load(f)
+            if cached_moments and isinstance(cached_moments, list) and len(cached_moments) > 0:
+                print(f"✅ Loaded {len(cached_moments)} cached viral moments from: {moments_file}")
+                return cached_moments
+        except Exception:
+            pass
+
     if not vtt_path or not vtt_path.exists():
         raise FileNotFoundError(f"Transcript file not found in {work_dir}")
 
@@ -194,15 +204,17 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
         clip_idx = m.get("clip_index", i)
         clip_name = f"clip_{clip_idx}.mp4"
         clip_path = clips_dir / clip_name
+
         orig_start = float(m.get("start_time", 0))
-        orig_end = float(m.get("end_time", orig_start + 15))
+        orig_end = float(m.get("end_time", 0))
         spoken_opening = m.get("spoken_opening", "")
 
         # Intelligent VTT speech boundary snapping with acoustic pre-roll cushion
         start_t = orig_start
         end_t = orig_end
+        vocal_t = orig_start
         if vtt_path and vtt_path.exists():
-            snapped_s, snapped_e = snap_clip_boundaries(
+            snapped_s, snapped_e, vocal_t = snap_clip_boundaries(
                 vtt_path=vtt_path,
                 start_time=orig_start,
                 end_time=orig_end,
@@ -212,7 +224,7 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
             )
             if snapped_s != orig_start or snapped_e != orig_end:
                 diff_ms = (orig_start - snapped_s) * 1000
-                print(f"\n⏱️ Clip #{clip_idx}: Snapped to Speech Boundary: {orig_start:.2f}s -> {snapped_s:.2f}s ({diff_ms:+.0f}ms pre-roll), end={orig_end:.2f}s -> {snapped_e:.2f}s")
+                print(f"\n⏱️ Clip #{clip_idx}: Snapped to Speech Boundary: {orig_start:.2f}s -> {snapped_s:.2f}s ({diff_ms:+.0f}ms pre-roll), end={orig_end:.2f}s -> {snapped_e:.2f}s (vocal={vocal_t:.2f}s)")
                 start_t = snapped_s
                 end_t = snapped_e
                 m["start_time"] = start_t
@@ -241,10 +253,12 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
         # AI Subtitle Polishing (Fix typos, Irish place names, verbal stutters)
         ass_path = None
         if vtt_path and vtt_path.exists():
-            raw_cues = extract_clip_vtt_cues(vtt_path, start_t, end_t)
+            raw_cues = extract_clip_vtt_cues(vtt_path, start_t, end_t, vocal_start=vocal_t)
             if raw_cues:
                 print(f"   📝 Polishing {len(raw_cues)} subtitle cues with Gemini 3.8 Flash...")
-                polished_cues = polish_subtitles_with_gemini(raw_cues, duration)
+                polished_cues = polish_subtitles_with_gemini(
+                    raw_cues, duration, spoken_opening=spoken_opening
+                )
                 temp_ass = temp_subs_dir / f"clip_{clip_idx}.ass"
                 generate_ass_file(polished_cues, temp_ass)
                 ass_path = str(temp_ass)

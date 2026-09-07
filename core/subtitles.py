@@ -105,37 +105,46 @@ def snap_clip_boundaries(
     spoken_opening: str = "",
     lead_in: float = 0.35,
     lead_out: float = 0.35
-) -> Tuple[float, float]:
+) -> Tuple[float, float, float]:
     """
     Snaps LLM-estimated start/end timestamps to actual spoken word boundaries in the VTT.
-    Applies an acoustic lead-in pre-roll (default 0.35s) so the speaker's vocal attack, breath,
-    and opening consonants are preserved in full, clamped to the preceding sentence end.
-    Also applies a lead-out buffer (default 0.35s) so the outro word decay is not cut abruptly.
+    Returns:
+        (snapped_start, snapped_end, vocal_start)
+    where:
+        snapped_start: Video cut start time (with acoustic lead_in pre-roll cushion).
+        snapped_end: Video cut end time (with lead_out decay cushion).
+        vocal_start: The exact timestamp where the speaker's first word begins in the VTT.
     """
     cues = parse_vtt_cues_robust(vtt_path)
     if not cues:
-        return max(0.0, round(start_time - lead_in, 3)), round(end_time + lead_out, 3)
+        vocal = round(start_time, 3)
+        return max(0.0, round(start_time - lead_in, 3)), round(end_time + lead_out, 3), vocal
 
     # 1. Snap Start Time
     words = re.findall(r"\b\w+\b", spoken_opening.lower()) if spoken_opening else []
     first_word = words[0] if words else ""
     second_word = words[1] if len(words) > 1 else ""
+    two_words = f"{first_word} {second_word}" if second_word else first_word
 
     start_cue_idx = None
 
-    # Strategy A: Match opening words within +- 6 seconds of start_time
+    # Strategy A: Match opening words within a tight window (+- 2.5s) of start_time
     if first_word:
         candidates = []
         for i, (cs, ce, txt) in enumerate(cues):
-            if abs(cs - start_time) < 6.0:
+            dist = abs(cs - start_time)
+            if dist <= 2.5:
                 txt_lower = txt.lower()
-                if first_word in txt_lower:
-                    score = 0 if (second_word and second_word in txt_lower) else 1
-                    # In YouTube rolling subs, pick the EARLIEST cue where the phrase appears
-                    candidates.append((score, cs, i))
+                if two_words and two_words in txt_lower:
+                    candidates.append((0, dist, cs, i))
+                elif first_word in txt_lower and second_word and second_word in txt_lower:
+                    candidates.append((1, dist, cs, i))
+                elif first_word in txt_lower and dist <= 1.2:
+                    candidates.append((2, dist, cs, i))
         if candidates:
+            # Sort by match quality first, then closest distance to start_time
             candidates.sort(key=lambda x: (x[0], x[1]))
-            start_cue_idx = candidates[0][2]
+            start_cue_idx = candidates[0][3]
 
     # Strategy B: If start_time lands inside a cue, snap to that cue's start
     if start_cue_idx is None:
@@ -144,10 +153,10 @@ def snap_clip_boundaries(
                 start_cue_idx = i
                 break
 
-    # Strategy C: Closest cue within 3 seconds
+    # Strategy C: Closest cue within 2 seconds
     if start_cue_idx is None:
         closest = min(range(len(cues)), key=lambda i: abs(cues[i][0] - start_time))
-        if abs(cues[closest][0] - start_time) < 3.0:
+        if abs(cues[closest][0] - start_time) < 2.0:
             start_cue_idx = closest
 
     if start_cue_idx is not None:
@@ -159,7 +168,9 @@ def snap_clip_boundaries(
         else:
             snapped_start = raw_start - lead_in
         snapped_start = round(max(0.0, snapped_start), 3)
+        vocal_start = round(raw_start, 3)
     else:
+        vocal_start = round(start_time, 3)
         snapped_start = max(0.0, round(start_time - lead_in, 3))
 
     # 2. Snap End Time
@@ -168,7 +179,7 @@ def snap_clip_boundaries(
         if cs <= end_time <= ce:
             end_cue_idx = i
             break
-        elif abs(ce - end_time) < 2.0:
+        elif abs(ce - end_time) < 1.8:
             end_cue_idx = i
 
     if end_cue_idx is not None:
@@ -182,13 +193,19 @@ def snap_clip_boundaries(
     else:
         snapped_end = round(end_time + lead_out, 3)
 
-    return snapped_start, snapped_end
+    return snapped_start, snapped_end, vocal_start
 
 
-def extract_clip_vtt_cues(vtt_path: Path, start_time: float, end_time: float) -> List[Dict[str, Any]]:
+def extract_clip_vtt_cues(
+    vtt_path: Path,
+    start_time: float,
+    end_time: float,
+    vocal_start: Optional[float] = None
+) -> List[Dict[str, Any]]:
     """
     Extracts raw spoken dialogue cues from WebVTT file within [start_time, end_time].
-    Returns list of dicts with relative start/end times and text.
+    Strictly excludes cues that finished before or at the vocal onset (prior sentence residue),
+    preventing un-spoken words from the preceding context from flashing on screen.
     """
     cues_raw = parse_vtt_cues_robust(vtt_path)
     if not cues_raw:
@@ -196,11 +213,23 @@ def extract_clip_vtt_cues(vtt_path: Path, start_time: float, end_time: float) ->
 
     cues = []
     seen_texts = set()
+    v_start = vocal_start if vocal_start is not None else start_time
 
     for c_start, c_end, combined_text in cues_raw:
+        # Strictly exclude cues that finished before or right at vocal onset
+        if c_end <= (v_start + 0.08):
+            continue
+        if c_start >= end_time:
+            continue
+
         if c_end > start_time and c_start < end_time:
             rel_start = max(0.0, c_start - start_time)
             rel_end = min(end_time - start_time, c_end - start_time)
+
+            # Ensure the first cue's subtitle does not appear before speech begins
+            if c_start < v_start:
+                rel_start = max(rel_start, round(v_start - start_time, 2))
+
             if combined_text and combined_text not in seen_texts:
                 seen_texts.add(combined_text)
                 cues.append({
@@ -215,6 +244,7 @@ def extract_clip_vtt_cues(vtt_path: Path, start_time: float, end_time: float) ->
 def polish_subtitles_with_gemini(
     raw_cues: List[Dict[str, Any]],
     clip_duration: float,
+    spoken_opening: str = "",
     project_id: str = "aiclipcutter-batch-7821",
     location: str = "global"
 ) -> List[Dict[str, Any]]:
@@ -238,8 +268,10 @@ def polish_subtitles_with_gemini(
     )
 
     formatted_raw = "\n".join([f"[{c['start']}s - {c['end']}s] {c['text']}" for c in raw_cues])
+    first_start = raw_cues[0]["start"] if raw_cues else 0.0
+    opening_hint = f"\nThe speaker's opening sentence begins with: \"{spoken_opening}\". Do NOT include any dialogue or words before this opening sentence." if spoken_opening else ""
 
-    prompt = f"""You are a professional video captions editor optimizing a {clip_duration:.1f}-second TEDx clip for Instagram Reels.
+    prompt = f"""You are a professional video captions editor optimizing a {clip_duration:.1f}-second TEDx clip for Instagram Reels.{opening_hint}
 
 Raw transcript with clip-relative timestamps:
 {formatted_raw}
@@ -249,11 +281,11 @@ Task:
 2. Clean stuttering, false starts, and filler words ("um", "uh", "to to").
 3. Preserve the exact words and cadence spoken by the speaker so the viewer reads what they hear.
 4. Chunk the dialogue into punchy, high-retention 2 to 5 word subtitle lines (all UPPERCASE).
-5. Ensure start and end timestamps match the speech flow between 0.0s and {clip_duration:.1f}s.
+5. Ensure start and end timestamps match the speech flow between {first_start:.2f}s and {clip_duration:.1f}s. The first subtitle caption MUST NOT start before {first_start:.2f}s.
 6. Return a strict JSON array of objects:
 [
-  {{"start": 0.0, "end": 1.8, "text": "RECOMMENDED ACTIVITY:"}},
-  {{"start": 1.8, "end": 4.2, "text": "WALKING IN A LOCAL PARK"}}
+  {{"start": {first_start:.2f}, "end": {first_start + 1.8:.2f}, "text": "RECOMMENDED ACTIVITY:"}},
+  {{"start": {first_start + 1.8:.2f}, "end": {first_start + 4.2:.2f}, "text": "WALKING IN A LOCAL PARK"}}
 ]
 """
 
@@ -268,6 +300,9 @@ Task:
         )
         data = json.loads(response.text)
         if isinstance(data, list) and len(data) > 0:
+            # Enforce that the first subtitle does not display before vocal onset
+            if data and data[0].get("start", 0.0) < first_start:
+                data[0]["start"] = round(first_start, 2)
             return data
     except Exception as e:
         print(f"⚠️ Gemini subtitle polish warning: {e}, using raw cues.")
