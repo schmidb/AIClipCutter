@@ -7,33 +7,25 @@
 
 ## 1. Executive Summary & Architecture Clarification
 
-The repository currently contains two distinct architectures:
+AIClipCutter runs on a unified, high-performance **Native Pipeline** centered in `core/`:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        AIClipCutter Architecture                       │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
-       ┌────────────────────────────┴────────────────────────────┐
-       ▼                                                         ▼
-┌───────────────────────────────────────┐       ┌───────────────────────────────────────┐
-│     Native Lightweight Pipeline       │       │         Legacy Cloud Engine           │
-│         (ACTIVE / DEFAULT)            │       │       (OPTIONAL / INACTIVE)           │
-│                                       │       │                                       │
-│ • run_single.py & run_batch.py        │       │ • engine/ (opensource-clipping)       │
-│ • core/gemini_extractor.py (Gemini 3.8)│      │ • Requires heavy CUDA, PyTorch, C++   │
-│ • core/compositor.py (Smart Framing)  │       │ • Local Faster-Whisper transcription  │
-│ • core/subtitles.py (Acoustic Snapping│       │ • Local MediaPipe / YOLO face detector│
-│ • integrations/ghl_publisher.py       │       │ • Kept only for GPU VM batch runs     │
-│ • Ultra-fast (10-15s render on PC)    │       │                                       │
-└───────────────────────────────────────┘       └───────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                       Production Native Pipeline                       │
+│                                                                        │
+│ • run_single.py & run_batch.py (Master CLI Entrypoints)                │
+│ • core/gemini_extractor.py (Moment Hunting & Virality Scoring)         │
+│ • core/compositor.py (Smart Multi-Point Vision Auto-Framing)           │
+│ • core/subtitles.py (Acoustic Snapping & Kinetic Subtitles)            │
+│ • integrations/ghl_publisher.py (GoHighLevel Social Planner Engine)    │
+│ • Ultra-fast (15-30s render per clip, zero local CUDA/PyTorch bloat)   │
+└────────────────────────────────────────────────────────────────────────┘
 ```
-
-### Are we using `/engine`?
-- **No.** The entire working production pipeline uses the **Native Pipeline** (`core/`, `run_single.py`, `run_batch.py`).
-- `/engine` is a clone of `NaufalRizqullah/opensource-clipping`. It is a heavy, monolithic module requiring local CUDA builds, Faster-Whisper, and local MediaPipe/YOLO models.
-- The only reference to `/engine` is in `run_clip_engine_cloud()` in `run_batch.py`, which is only triggered if someone explicitly passes `--mode cloud`.
-- For standard local processing (`--mode local`, the default), `/engine` is **completely bypassed**.
 
 ---
 
@@ -92,12 +84,12 @@ Process talks from `config/playlist_markus.json` using `--preset config/linkedin
 3. `jIas2vGSn2Q` — Dr. Markus Schmidberger (Video 3)
 4. `BBdwxF5WKLQ` — Dr. Markus Schmidberger (Video 4)
 
-### Phase 3: Virality Uncapping (Optional Enhancement)
-- Allow variable clip counts driven purely by virality score ($\ge 88\%$) rather than capping at 5 creative angles.
+### Phase 3: Virality Uncapping & Dynamic Capacity (Completed)
+- [x] Implemented Option B: Unconstrained angle categorization with dynamic clip capacity (up to 10 clips per video) driven purely by virality score ($\ge 88\%$).
 
 ---
 
 ## 5. Repository Maintenance Decision
-- **`PROJECT_PLAN.md`**: Maintained as the single, authoritative project plan and architecture document.
-- **`implementation_plan.md`**: Removed from the repository root to avoid duplicate and out-of-sync documentation.
-- **`/engine`**: Retained as an optional reference for legacy cloud VM batch runs, but ignored during local pipeline execution.
+- **`PROJECT_PLAN.md`**: Maintained as the single, authoritative project roadmap and architecture document.
+- **`implementation_plan.md`**: Removed from the repository root to eliminate duplicate, conflicting specs.
+- **`/engine`**: Completely removed from the repository. The clean native `core/` pipeline is the sole, dedicated production engine.

@@ -124,10 +124,7 @@ AIClipCutter/
 │   ├── ghl_master_clips/          # Sequentially numbered MP4 clips & JPG covers
 │   ├── ghl_master_playlist_schedule.csv # GoHighLevel Social Planner upload CSV
 │   └── clips_metadata_report.csv  # Detailed tracking and review report
-└── engine/                        # (Optional) Legacy opensource-clipping engine
 ```
-
-> **Note on `/engine`**: `/engine` contains a clone of `opensource-clipping` intended for offline GPU VMs running local Faster-Whisper. The active, production pipeline is the **Native Pipeline** inside `core/`.
 
 ---
 
