@@ -1,0 +1,36 @@
+{
+  "playlist_title": "Dr. Markus Schmidberger LinkedIn Thought Leadership",
+  "preset": "linkedin",
+  "platform": "LinkedIn",
+  "speaker": "Dr. Markus Schmidberger",
+  "videos": [
+    {
+      "id": "8nvuz0TV7tw",
+      "title": "AI-Powered Collaboration: The Junto AI Vision",
+      "speaker": "Dr. Markus Schmidberger",
+      "duration_seconds": 3075,
+      "url": "https://www.youtube.com/watch?v=8nvuz0TV7tw"
+    },
+    {
+      "id": "hvmkH2xUJ4k",
+      "title": "How to Implement AI in Your Business: From AI Use Cases to Real ROI | Dr. Markus Schmidberger",
+      "speaker": "Dr. Markus Schmidberger",
+      "duration_seconds": 2914,
+      "url": "https://www.youtube.com/watch?v=hvmkH2xUJ4k"
+    },
+    {
+      "id": "jIas2vGSn2Q",
+      "title": "Why Your AI Strategy Will Fail | Markus Schmidberger | Isha Taneja",
+      "speaker": "Dr. Markus Schmidberger",
+      "duration_seconds": 1156,
+      "url": "https://www.youtube.com/watch?v=jIas2vGSn2Q"
+    },
+    {
+      "id": "BBdwxF5WKLQ",
+      "title": "Scout24: Driving a digital marketplace in the cloud with a data catalog",
+      "speaker": "Dr. Markus Schmidberger",
+      "duration_seconds": 2077,
+      "url": "https://www.youtube.com/watch?v=BBdwxF5WKLQ"
+    }
+  ]
+}

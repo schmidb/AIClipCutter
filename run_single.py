@@ -41,27 +41,29 @@ def extract_video_id(url: str) -> str:
 
 
 def get_video_info(url_or_id: str) -> dict:
-    """Resolves speaker, title, and YouTube URL from playlist_tedx.json if available."""
+    """Resolves speaker, title, and YouTube URL from config playlists if available."""
     video_id = extract_video_id(url_or_id)
-    playlist_path = Path("config/playlist_tedx.json")
-    if playlist_path.exists():
-        try:
-            with open(playlist_path, "r", encoding="utf-8") as f:
-                pdata = json.load(f)
-                for v in pdata.get("videos", []):
-                    if v.get("id") == video_id or video_id in v.get("url", ""):
-                        return {
-                            "id": v.get("id"),
-                            "title": v.get("title", f"TEDx Talk ({video_id})"),
-                            "speaker": v.get("speaker", "TEDx Speaker"),
-                            "url": v.get("url", f"https://www.youtube.com/watch?v={video_id}")
-                        }
-        except Exception:
-            pass
+    playlist_files = [Path("config/playlist_markus.json"), Path("config/playlist_tedx.json")]
+    for playlist_path in playlist_files:
+        if playlist_path.exists():
+            try:
+                with open(playlist_path, "r", encoding="utf-8") as f:
+                    pdata = json.load(f)
+                    video_list = pdata.get("videos", []) if isinstance(pdata, dict) else pdata
+                    for v in video_list:
+                        if v.get("id") == video_id or video_id in v.get("url", ""):
+                            return {
+                                "id": v.get("id"),
+                                "title": v.get("title", f"Video ({video_id})"),
+                                "speaker": v.get("speaker", "Dr. Markus Schmidberger" if "markus" in str(playlist_path) else "Speaker"),
+                                "url": v.get("url", f"https://www.youtube.com/watch?v={video_id}")
+                            }
+            except Exception:
+                pass
     return {
         "id": video_id,
-        "title": f"TEDx Talk ({video_id})",
-        "speaker": "TEDx Speaker",
+        "title": f"Video ({video_id})",
+        "speaker": "Speaker",
         "url": f"https://www.youtube.com/watch?v={video_id}"
     }
 
@@ -243,11 +245,12 @@ def step_ghl(
     work_dir: Path,
     video_title: str,
     speaker_name: str = "",
-    full_video_url: str = ""
+    full_video_url: str = "",
+    platform: str = "Instagram"
 ) -> Path:
     """Step 4: Format and Export GoHighLevel Social Planner CSV."""
     print("\n" + "=" * 60)
-    print("📅 STEP 4: Exporting GoHighLevel Social Planner Schedule")
+    print(f"📅 STEP 4: Exporting GoHighLevel Social Planner Schedule ({platform})")
     print("=" * 60)
 
     # Optional sync to Google Cloud Storage bucket
@@ -279,7 +282,7 @@ def step_ghl(
         ghl_items.append({
             "duration": item.get("duration", 15),
             "hook_banner": item.get("hook_banner", ""),
-            "caption": item.get("caption") or item.get("instagram_caption") or item.get("linkedin_caption") or "",
+            "caption": item.get("caption") or item.get("linkedin_post") or item.get("linkedin_caption") or item.get("instagram_caption") or "",
             "hashtags": item.get("hashtags", []),
             "media_url": media_url,
             "cover_image": item.get("cover_path", ""),
@@ -289,9 +292,9 @@ def step_ghl(
         })
 
     csv_path = work_dir / "ghl_social_planner_schedule.csv"
-    format_ghl_csv(ghl_items, str(csv_path))
+    format_ghl_csv(ghl_items, str(csv_path), platform=platform)
 
-    print(f"\n✅ GoHighLevel CSV Ready:")
+    print(f"\n✅ GoHighLevel CSV Ready ({platform}):")
     print(f"   Path: {csv_path.resolve()}")
     print(f"   Import into: GoHighLevel > Marketing > Social Planner > CSV Upload")
     return csv_path
@@ -303,9 +306,14 @@ def process_single_video(
     clips: int = 6,
     step: str = "all",
     video_title: str = "",
-    speaker: str = ""
+    speaker: str = "",
+    platform: str = None
 ) -> list:
     """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
+    if preset in ["tedx", "linkedin"]:
+        preset = f"config/{preset}.yaml"
+
+    target_platform = platform or ("LinkedIn" if "linkedin" in preset.lower() else "Instagram")
     video_id = extract_video_id(url)
     work_dir = Path("output") / video_id
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -313,7 +321,7 @@ def process_single_video(
     vinfo = get_video_info(url)
     speaker_name = speaker or vinfo.get("speaker", "")
     full_video_url = vinfo.get("url", url)
-    display_title = video_title or vinfo.get("title", f"TEDx Talk ({video_id})")
+    display_title = video_title or vinfo.get("title", f"Video ({video_id})")
 
     print("\n" + "=" * 70)
     print(f"🎬 AIClipCutter — Single Video Mode")
@@ -321,6 +329,7 @@ def process_single_video(
     print(f"Video ID:     {video_id}")
     print(f"Speaker:      {speaker_name}")
     print(f"Title:        {display_title}")
+    print(f"Platform:     {target_platform}")
     print(f"Working Dir:  {work_dir.resolve()}")
     print(f"Preset:       {preset}")
     print(f"Step:         {step}")
@@ -348,7 +357,7 @@ def process_single_video(
 
     if step in ["all", "moments"]:
         if not vtt_path or not vtt_path.exists():
-            source_video, vtt_path = step_download(url, work_dir)
+            _, vtt_path = step_download(url, work_dir)
         moments = step_moments(
             vtt_path=vtt_path,
             work_dir=work_dir,
@@ -393,7 +402,8 @@ def process_single_video(
             work_dir=work_dir,
             video_title=display_title,
             speaker_name=speaker_name,
-            full_video_url=full_video_url
+            full_video_url=full_video_url,
+            platform=target_platform
         )
 
     print("\n" + "=" * 70)
@@ -409,6 +419,7 @@ def main():
     parser.add_argument("--speaker", default="", help="Speaker name (optional)")
     parser.add_argument("--title", default="", help="Video title (optional)")
     parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
+    parser.add_argument("--platform", default="", help="Target platform (Instagram, LinkedIn, or auto)")
     parser.add_argument("--clips", type=int, default=6, help="Target number of clips to produce")
     parser.add_argument(
         "--step",
@@ -423,7 +434,8 @@ def main():
         clips=args.clips,
         step=args.step,
         video_title=args.title,
-        speaker=args.speaker
+        speaker=args.speaker,
+        platform=args.platform or None
     )
 
 

@@ -1,52 +1,60 @@
 preset_name: "linkedin"
 display_name: "Markus Thought Leadership"
 target_platform: "linkedin"
-gemini_model: "gemini-3.8-flash"  # Active model for thought-leadership clipping
+gemini_model: "gemini-3.8-flash"  # Active model on Vertex AI
 
 # Clip Constraints
 clips_per_video: 5
 min_duration_seconds: 15
-max_duration_seconds: 30
+max_duration_seconds: 35
 aspect_ratio: "9:16"
 
 # Visual Framing & Subtitles
 face_detector: "mediapipe"
 font_style: "CLEAN_MODERN"
 words_per_subtitle: 5
-hook_duration_seconds: 3.0
+hook_duration_seconds: 3.5
 hook_style: "banner_top"
 
 # Call-to-Action & Formatting
-cta_text: "What has been your experience with this? Let's discuss in the comments below."
+cta_text: "What has been your experience with AI implementation? Let's discuss in the comments below."
 hashtags:
+  - "#ArtificialIntelligence"
+  - "#AIStrategy"
+  - "#EnterpriseAI"
   - "#Leadership"
-  - "#BusinessGrowth"
-  - "#Strategy"
-  - "#ExecutiveCoaching"
-  - "#Entrepreneurship"
+  - "#DigitalTransformation"
+  - "#DataStrategy"
 
 # Gemini Moment Detection Prompt
 gemini_prompt: |
-  You are an executive content strategist specializing in high-engagement LinkedIn video posts.
-  Analyze the provided video transcript and identify {num_clips} impactful soundbites between {min_duration} and {max_duration} seconds.
+  You are an executive content strategist specializing in high-engagement, viral LinkedIn video posts.
+  Analyze the provided video transcript and identify {num_clips} impactful, standalone soundbites between {min_duration} and {max_duration} seconds spoken by or featuring {speaker_name}.
+
+  VIDEO CONTEXT:
+  - Video Title: "{video_title}"
+  - Featured Speaker: "{speaker_name}"
+  - Full Interview URL: "{full_video_url}"
 
   SELECTION CRITERIA FOR LINKEDIN:
-  1. PRACTICAL INSIGHT: The clip must share a tactical business lesson, leadership framework, contrarian opinion, or personal entrepreneurial breakthrough.
-  2. EXECUTIVE CLARITY: Crisp, clear communication without rambling.
-  3. ENGAGEMENT TRIGGER: The point made should spark debate or reflection among senior professionals and business founders.
+  1. PRACTICAL INSIGHT: The clip must share a tactical enterprise AI lesson, leadership framework, contrarian opinion, or personal breakthrough from {speaker_name}.
+  2. EXECUTIVE CLARITY: Crisp, authoritative communication without rambling or host banter. Focus on {speaker_name}'s answers.
+  3. HOOK QUALITY: The opening line of the clip must instantly grab attention in a LinkedIn feed.
+  4. ENGAGEMENT TRIGGER: The point made should spark debate or reflection among senior executives, founders, and tech leaders.
 
   OUTPUT FORMAT (Strict JSON Array):
   [
     {
       "clip_index": 1,
-      "start_time": 305.0,
-      "end_time": 328.0,
-      "duration": 23.0,
-      "virality_score": 92,
-      "hook_banner": "The biggest mistake first-time founders make",
+      "start_time": 125.0,
+      "end_time": 152.0,
+      "duration": 27.0,
+      "virality_score": 94,
+      "hook_banner": "WHY MOST AI STRATEGIES FAIL",
       "spoken_opening": "First words spoken in this clip...",
-      "linkedin_post": "Most leaders think scaling is about doing more.\n\nIn reality, it's about doing fewer things, but with ruthless precision.\n\nWhen we scaled our operations, the breakthrough came when we eliminated 40% of our low-margin offerings.\n\nWhat has been your experience with this? Let's discuss in the comments below.",
-      "hashtags": ["#Leadership", "#BusinessGrowth", "#Strategy", "#ExecutiveCoaching"]
+      "linkedin_post": "Most companies are approaching AI backwards.\n\nThey start with the tool instead of the business problem, leading to expensive pilot purgatory.\n\nWhen you anchor AI to clear operational workflows and measurable ROI, the economics completely shift.\n\nWhat has been your experience implementing AI in your organization? Let's discuss in the comments below.",
+      "hashtags": ["#AIStrategy", "#EnterpriseAI", "#Leadership", "#DigitalTransformation", "#MarkusSchmidberger"]
     }
   ]
+
 

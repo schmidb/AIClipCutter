@@ -54,7 +54,7 @@ def run_clip_engine_cloud(
     return process.returncode == 0
 
 
-def create_master_ghl_schedule(all_rendered_items: list, output_csv_path: Path):
+def create_master_ghl_schedule(all_rendered_items: list, output_csv_path: Path, platform: str = "Instagram"):
     """Aggregates all clips from all playlist videos into a single master GoHighLevel CSV."""
     if not all_rendered_items:
         return
@@ -67,9 +67,9 @@ def create_master_ghl_schedule(all_rendered_items: list, output_csv_path: Path):
         start_date=start_date,
         post_interval_days=1,
         post_time_hour=18,
-        platform="Instagram"
+        platform=platform
     )
-    print(f"\n🌟 Master GoHighLevel Schedule Created:")
+    print(f"\n🌟 Master GoHighLevel Schedule Created ({platform}):")
     print(f"   Path:  {output_csv_path.resolve()}")
     print(f"   Posts: {len(all_rendered_items)} scheduled across {len(all_rendered_items)} consecutive days at 6:00 PM")
 
@@ -80,26 +80,40 @@ def main():
     parser.add_argument("--url", help="Single video URL to process")
     parser.add_argument("--playlist", default="config/playlist_tedx.json", help="Playlist JSON file")
     parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
+    parser.add_argument("--platform", default="", help="Target platform (Instagram, LinkedIn, or auto)")
     parser.add_argument("--clips", type=int, default=6, help="Clips per video (default: 6)")
     parser.add_argument("--min-duration", type=int, default=10, help="Min duration in seconds")
     parser.add_argument("--max-duration", type=int, default=20, help="Max duration in seconds")
     args = parser.parse_args()
 
+    if args.preset in ["tedx", "linkedin"]:
+        args.preset = f"config/{args.preset}.yaml"
+
     # Determine videos to run
     video_targets = []
+    playlist_meta = {}
     if args.url:
         video_targets.append({"url": args.url, "title": "Single Target Video"})
     elif args.playlist and Path(args.playlist).exists():
         with open(args.playlist, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            video_targets = data.get("videos", [])
-        print(f"📋 Loaded {len(video_targets)} videos from playlist: {data.get('playlist_title')}")
+            playlist_meta = json.load(f)
+            video_targets = playlist_meta.get("videos", []) if isinstance(playlist_meta, dict) else playlist_meta
+        title = playlist_meta.get('playlist_title', args.playlist) if isinstance(playlist_meta, dict) else args.playlist
+        print(f"📋 Loaded {len(video_targets)} videos from playlist: {title}")
     else:
         print("❌ Error: Please specify --url or --playlist")
         sys.exit(1)
 
+    target_platform = (
+        args.platform
+        or (playlist_meta.get("platform") if isinstance(playlist_meta, dict) else "")
+        or ("LinkedIn" if "linkedin" in args.preset.lower() else "Instagram")
+    )
+
     print("\n" + "=" * 70)
     print(f"🚀 AIClipCutter Batch Processing — Mode: {args.mode.upper()}")
+    print(f"Platform:       {target_platform}")
+    print(f"Preset:         {args.preset}")
     print(f"Total Videos:   {len(video_targets)}")
     print(f"Clips / Video:  {args.clips}")
     print(f"Total Target:   ~{len(video_targets) * args.clips} vertical clips")
@@ -123,13 +137,14 @@ def main():
                 clips=args.clips,
                 step="all",
                 video_title=v_title,
-                speaker=v_speaker
+                speaker=v_speaker,
+                platform=target_platform
             )
             for c in clips:
                 all_master_items.append({
                     "duration": c.get("duration", 15),
                     "hook_banner": c.get("hook_banner", ""),
-                    "caption": c.get("caption") or c.get("instagram_caption") or c.get("linkedin_caption") or "",
+                    "caption": c.get("linkedin_post") or c.get("caption") or c.get("linkedin_caption") or c.get("instagram_caption") or "",
                     "hashtags": c.get("hashtags", []),
                     "media_url": c.get("local_path", ""),
                     "cover_image": c.get("cover_path", ""),
@@ -150,7 +165,7 @@ def main():
 
     if args.mode == "local" and all_master_items:
         master_csv = Path("output/ghl_master_playlist_schedule.csv")
-        create_master_ghl_schedule(all_master_items, master_csv)
+        create_master_ghl_schedule(all_master_items, master_csv, platform=target_platform)
 
     print("\n" + "=" * 70)
     print("🎉 All videos in batch processed successfully!")

@@ -12,33 +12,34 @@ from typing import List, Dict, Any
 
 
 def resolve_speaker_and_url(clip: Dict[str, Any]) -> tuple[str, str]:
-    """Resolves speaker name and full YouTube URL from clip or playlist_tedx.json."""
+    """Resolves speaker name and full YouTube URL from clip or config playlist files."""
     speaker = clip.get("speaker", "").strip()
     full_url = clip.get("full_video_url", "").strip()
     
     if speaker and full_url:
         return speaker, full_url
 
-    # Check playlist_tedx.json
-    playlist_path = Path("config/playlist_tedx.json")
-    if playlist_path.exists():
-        try:
-            with open(playlist_path, "r", encoding="utf-8") as f:
-                pdata = json.load(f)
-                video_list = pdata.get("videos", [])
-                
-                # Match by video ID in media_url or source_video_title
-                search_text = f"{clip.get('media_url', '')} {clip.get('source_video_title', '')} {clip.get('cover_image', '')}"
-                for v in video_list:
-                    vid_id = v.get("id", "")
-                    if vid_id and vid_id in search_text:
-                        if not speaker:
-                            speaker = v.get("speaker", "")
-                        if not full_url:
-                            full_url = v.get("url", "")
-                        return speaker, full_url
-        except Exception:
-            pass
+    # Check playlist files in config
+    playlist_files = [Path("config/playlist_markus.json"), Path("config/playlist_tedx.json")]
+    for playlist_path in playlist_files:
+        if playlist_path.exists():
+            try:
+                with open(playlist_path, "r", encoding="utf-8") as f:
+                    pdata = json.load(f)
+                    video_list = pdata.get("videos", []) if isinstance(pdata, dict) else pdata
+                    
+                    # Match by video ID in media_url or source_video_title
+                    search_text = f"{clip.get('media_url', '')} {clip.get('source_video_title', '')} {clip.get('cover_image', '')}"
+                    for v in video_list:
+                        vid_id = v.get("id", "")
+                        if vid_id and vid_id in search_text:
+                            if not speaker:
+                                speaker = v.get("speaker", "")
+                            if not full_url:
+                                full_url = v.get("url", "")
+                            return speaker, full_url
+            except Exception:
+                pass
 
     return speaker, full_url
 
@@ -120,6 +121,68 @@ def build_instagram_post_content(
     return "\n\n".join(content_sections)
 
 
+def build_linkedin_post_content(
+    caption_text: str,
+    speaker: str = "",
+    full_video_url: str = "",
+    hashtags: list = None
+) -> str:
+    """
+    Constructs a high-impact LinkedIn post:
+    1. Hook & core thought-leadership insight
+    2. Speaker attribution: 🎙️ Speaker: {speaker}
+    3. Full episode/interview link: 🔗 Listen to the full story / interview: {full_video_url}
+    4. Call to Action: 💼 Follow Markus on LinkedIn for actionable enterprise AI strategies & executive leadership insights!
+    5. Clean, professional hashtags
+    """
+    body = caption_text.strip()
+    # Extract any hashtags embedded anywhere in the body text
+    embedded_tags = re.findall(r"#\w+", body)
+    body_no_tags = re.sub(r"#\w+\s*", "", body).strip()
+
+    lines = []
+    for line in body_no_tags.split("\n"):
+        line_clean = line.strip()
+        if not line_clean:
+            continue
+        if "Follow " in line_clean or "Listen to the full" in line_clean or "Watch the full" in line_clean or "Speaker:" in line_clean:
+            continue
+        lines.append(line_clean)
+
+    main_copy = "\n\n".join(lines) if lines else body_no_tags
+
+    cta_lines = []
+    if speaker:
+        cta_lines.append(f"🎙️ Speaker: {speaker}")
+    if full_video_url:
+        cta_lines.append(f"🔗 Listen to the full story / interview: {full_video_url}")
+
+    cta_lines.append(
+        "💼 Follow Markus Schmidberger on LinkedIn for actionable enterprise AI strategies, data architectures, and executive leadership insights!"
+    )
+
+    default_tags = ["#ArtificialIntelligence", "#AIStrategy", "#EnterpriseAI", "#Leadership", "#DigitalTransformation", "#MarkusSchmidberger"]
+    combined_tags = []
+    all_input_tags = (hashtags or []) + embedded_tags
+    for tag in all_input_tags:
+        t = tag.strip()
+        if not t.startswith("#"):
+            t = f"#{t}"
+        if t not in combined_tags:
+            combined_tags.append(t)
+    for dt in default_tags:
+        if dt not in combined_tags:
+            combined_tags.append(dt)
+
+    content_sections = [main_copy]
+    if cta_lines:
+        content_sections.append("\n".join(cta_lines))
+    if combined_tags:
+        content_sections.append(".\n.\n" + " ".join(combined_tags))
+
+    return "\n\n".join(content_sections)
+
+
 def format_ghl_csv(
     clips_data: List[Dict[str, Any]],
     output_csv_path: str,
@@ -131,6 +194,7 @@ def format_ghl_csv(
 ) -> str:
     """
     Exports clip metadata to a GoHighLevel Social Planner compatible CSV file.
+    Supports both Instagram Reels and LinkedIn thought leadership formats.
     """
     if start_date is None:
         start_date = datetime.now() + timedelta(days=1)
@@ -144,21 +208,30 @@ def format_ghl_csv(
         schedule_str = current_schedule_time.strftime("%Y-%m-%d %H:%M:%S")
         
         caption_text = (
-            clip.get("caption")
-            or clip.get("instagram_caption")
+            clip.get("linkedin_post")
+            or clip.get("caption")
             or clip.get("linkedin_caption")
+            or clip.get("instagram_caption")
             or ""
         ).strip()
         hashtags = clip.get("hashtags", [])
         
         speaker, full_url = resolve_speaker_and_url(clip)
         
-        full_content = build_instagram_post_content(
-            caption_text=caption_text,
-            speaker=speaker,
-            full_video_url=full_url,
-            hashtags=hashtags
-        )
+        if platform.lower() == "linkedin":
+            full_content = build_linkedin_post_content(
+                caption_text=caption_text,
+                speaker=speaker or "Dr. Markus Schmidberger",
+                full_video_url=full_url,
+                hashtags=hashtags
+            )
+        else:
+            full_content = build_instagram_post_content(
+                caption_text=caption_text,
+                speaker=speaker,
+                full_video_url=full_url,
+                hashtags=hashtags
+            )
         
         media_url = clip.get("media_url", "")
         cover_image = clip.get("cover_image", "") or clip.get("cover_path", "")
