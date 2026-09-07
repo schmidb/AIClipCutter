@@ -41,7 +41,12 @@ def format_ghl_csv(
         schedule_str = current_schedule_time.strftime("%Y-%m-%d %H:%M:%S")
         
         # Combine caption and hashtags
-        caption_text = clip.get("caption", "").strip()
+        caption_text = (
+            clip.get("caption")
+            or clip.get("instagram_caption")
+            or clip.get("linkedin_caption")
+            or ""
+        ).strip()
         hashtags = clip.get("hashtags", [])
         if isinstance(hashtags, list) and hashtags:
             hashtag_str = " ".join(hashtags)
