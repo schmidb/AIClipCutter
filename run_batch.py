@@ -85,6 +85,7 @@ def main():
     parser.add_argument("--min-duration", type=int, default=10, help="Min duration in seconds")
     parser.add_argument("--max-duration", type=int, default=20, help="Max duration in seconds")
     parser.add_argument("--max-videos", type=int, default=None, help="Limit number of playlist videos to process")
+    parser.add_argument("--min-virality", type=int, default=None, help="Minimum virality score threshold (0-100)")
     args = parser.parse_args()
 
     if args.preset in ["tedx", "linkedin", "miriam"]:
@@ -118,8 +119,9 @@ def main():
     print(f"Platform:       {target_platform}")
     print(f"Preset:         {args.preset}")
     print(f"Total Videos:   {len(video_targets)}")
-    print(f"Clips / Video:  {args.clips}")
-    print(f"Total Target:   ~{len(video_targets) * args.clips} vertical clips")
+    print(f"Clips / Video:  {args.clips or 'Dynamic (by Virality Threshold)'}")
+    if args.min_virality:
+        print(f"Virality Cut:   >= {args.min_virality}%")
     print(f"Centering:      AI Smart Centering (Gemini 3.8 Flash Vision)")
     print("=" * 70)
 
@@ -141,12 +143,15 @@ def main():
                 step="all",
                 video_title=v_title,
                 speaker=v_speaker,
-                platform=target_platform
+                platform=target_platform,
+                min_virality=args.min_virality
             )
             for c in clips:
                 all_master_items.append({
                     "duration": c.get("duration", 15),
                     "hook_banner": c.get("hook_banner", ""),
+                    "virality_score": c.get("virality_score", 0),
+                    "content_angle": c.get("content_angle", ""),
                     "caption": c.get("linkedin_post") or c.get("caption") or c.get("linkedin_caption") or c.get("instagram_caption") or "",
                     "hashtags": c.get("hashtags", []),
                     "media_url": c.get("local_path", ""),

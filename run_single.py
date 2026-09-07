@@ -36,7 +36,9 @@ from integrations.ghl_publisher import format_ghl_csv
 
 def extract_video_id(url: str) -> str:
     """Extract YouTube 11-char video ID."""
-    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
+    if url and len(url) == 11 and re.match(r"^[0-9A-Za-z_-]{11}$", url):
+        return url
+    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else "sample_video"
 
 
@@ -121,22 +123,19 @@ def step_download(url: str, work_dir: Path) -> tuple[Path, Path]:
 def step_moments(
     vtt_path: Path,
     work_dir: Path,
-    preset_path: str,
-    clips_count: int,
+    preset_path: str = "config/tedx.yaml",
+    clips_count: int = None,
     speaker_name: str = "",
     video_title: str = "",
-    full_video_url: str = ""
+    full_video_url: str = "",
+    min_virality: int = None
 ) -> list:
-    """Step 2: AI Moment Detection with Google Gemini Vertex AI."""
+    """Step 2: AI Moment Hunter via Gemini 3.8 Flash."""
     print("\n" + "=" * 60)
     print("🧠 STEP 2: AI Moment Hunter (Google Gemini 3.8 Flash / Vertex AI)")
     print("=" * 60)
 
     moments_file = work_dir / "moments.json"
-    if moments_file.exists():
-        print(f"Found existing cached moments: {moments_file}")
-        with open(moments_file, "r", encoding="utf-8") as f:
-            return json.load(f)
 
     if not vtt_path or not vtt_path.exists():
         raise FileNotFoundError(f"Transcript file not found in {work_dir}")
@@ -149,6 +148,9 @@ def step_moments(
     preset_cfg = load_preset(preset_path)
     if clips_count:
         preset_cfg["clips_per_video"] = clips_count
+        preset_cfg["max_clips_per_video"] = clips_count
+    if min_virality is not None:
+        preset_cfg["min_virality_score"] = min_virality
 
     moments = extract_viral_moments(
         transcript_text=vtt_content,
@@ -292,6 +294,8 @@ def step_ghl(
         ghl_items.append({
             "duration": item.get("duration", 15),
             "hook_banner": item.get("hook_banner", ""),
+            "virality_score": item.get("virality_score", 0),
+            "content_angle": item.get("content_angle", ""),
             "caption": item.get("caption") or item.get("linkedin_post") or item.get("linkedin_caption") or item.get("instagram_caption") or "",
             "hashtags": item.get("hashtags", []),
             "media_url": media_url,
@@ -313,11 +317,12 @@ def step_ghl(
 def process_single_video(
     url: str,
     preset: str = "config/tedx.yaml",
-    clips: int = 6,
+    clips: int = None,
     step: str = "all",
     video_title: str = "",
     speaker: str = "",
-    platform: str = None
+    platform: str = None,
+    min_virality: int = None
 ) -> list:
     """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
     video_id = extract_video_id(url)
@@ -381,7 +386,8 @@ def process_single_video(
             clips_count=clips,
             speaker_name=speaker_name,
             video_title=display_title,
-            full_video_url=full_video_url
+            full_video_url=full_video_url,
+            min_virality=min_virality
         )
 
     if step in ["all", "render"]:
@@ -395,7 +401,8 @@ def process_single_video(
                 clips_count=clips,
                 speaker_name=speaker_name,
                 video_title=display_title,
-                full_video_url=full_video_url
+                full_video_url=full_video_url,
+                min_virality=min_virality
             )
         rendered_clips = step_render(source_video, moments, work_dir)
 
@@ -436,7 +443,8 @@ def main():
     parser.add_argument("--title", default="", help="Video title (optional)")
     parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
     parser.add_argument("--platform", default="", help="Target platform (Instagram, LinkedIn, or auto)")
-    parser.add_argument("--clips", type=int, default=6, help="Target number of clips to produce")
+    parser.add_argument("--clips", type=int, default=None, help="Target number of clips to produce")
+    parser.add_argument("--min-virality", type=int, default=None, help="Minimum virality score threshold (0-100)")
     parser.add_argument(
         "--step",
         default="all",
@@ -451,7 +459,8 @@ def main():
         step=args.step,
         video_title=args.title,
         speaker=args.speaker,
-        platform=args.platform or None
+        platform=args.platform or None,
+        min_virality=args.min_virality
     )
 
 

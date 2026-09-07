@@ -5,8 +5,10 @@ gemini_model: "gemini-3.8-flash"  # Active model for viral moment detection
 
 temperature: 0.75
 
-# Clip Constraints
+# Clip Constraints & Virality Thresholds
 clips_per_video: 6
+min_virality_score: 88
+max_clips_per_video: 8
 min_duration_seconds: 10
 max_duration_seconds: 20
 aspect_ratio: "9:16"
@@ -36,7 +38,8 @@ hashtags:
 # Gemini Moment Detection Prompt
 gemini_prompt: |
   You are an expert viral short-form video editor specializing in TEDx talks and Instagram Reels.
-  Analyze the provided video transcript and identify {num_clips} viral moments strictly between {min_duration} and {max_duration} seconds.
+  Analyze the provided video transcript and identify all high-impact viral moments scoring {min_virality_score}/100 or higher (up to a maximum of {max_clips} moments, each strictly between {min_duration} and {max_duration} seconds).
+  CRITICAL: Do NOT force low-quality moments or filler clips just to reach a count. Only return moments that genuinely meet or exceed the virality score threshold of {min_virality_score}/100. If only 3 moments qualify, return 3. If 7 qualify, return 7.
 
   VIDEO CONTEXT:
   - Speaker: {speaker_name}

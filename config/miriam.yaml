@@ -4,8 +4,10 @@ target_platform: "instagram_reels"
 gemini_model: "gemini-3.8-flash"
 temperature: 0.75
 
-# Clip Constraints
+# Clip Constraints & Virality Thresholds
 clips_per_video: 8
+min_virality_score: 88
+max_clips_per_video: 8
 min_duration_seconds: 12
 max_duration_seconds: 25
 aspect_ratio: "9:16"
@@ -38,7 +40,8 @@ hashtags:
 gemini_prompt: |
   You are an elite short-form video strategist and copywriter specializing in viral Instagram Reels for keynote speakers, TEDx, and Greator presentations.
   Analyze the provided transcript of Miriam Schmidberger's keynote "Know your Why and Fly" at the Greator Festival 2024.
-  Identify {num_clips} emotionally resonant, high-impact moments strictly between {min_duration} and {max_duration} seconds.
+  Identify all emotionally resonant, high-impact moments scoring {min_virality_score}/100 or higher (up to a maximum of {max_clips} moments, each strictly between {min_duration} and {max_duration} seconds).
+  CRITICAL: Do NOT force low-quality moments or filler clips just to reach a count. Only return moments that genuinely meet or exceed the virality score threshold of {min_virality_score}/100.
 
   SPEAKER CONTEXT:
   - Speaker: Miriam Schmidberger (Founder, Speaker, Transformation Coach)

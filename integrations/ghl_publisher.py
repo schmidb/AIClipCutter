@@ -282,6 +282,8 @@ def format_ghl_csv(
         metadata_rows.append({
             "Post Date": schedule_str,
             "Platform": platform,
+            "Virality Score": clip.get("virality_score", ""),
+            "Content Angle": clip.get("content_angle", ""),
             "Hook Banner": hook_banner,
             "Content": full_content,
             "Media URL": media_url,
@@ -313,11 +315,13 @@ def format_ghl_csv(
         
     print(f"[GHL Publisher] Exported {len(ghl_rows)} posts to {output_path} (GHL Social Planner compliant)")
 
-    # Also write local companion report with hook banners, cover paths, and durations
+    # Also write local companion report with virality scores, angles, hook banners, cover paths, and durations
     meta_report_path = output_path.parent / "clips_metadata_report.csv"
     meta_fieldnames = [
         "Post Date",
         "Platform",
+        "Virality Score",
+        "Content Angle",
         "Hook Banner",
         "Content",
         "Media URL",

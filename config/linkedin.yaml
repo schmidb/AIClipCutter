@@ -5,8 +5,10 @@ gemini_model: "gemini-3.8-flash"  # Active model on Vertex AI
 
 temperature: 0.75
 
-# Clip Constraints
+# Clip Constraints & Virality Thresholds
 clips_per_video: 5
+min_virality_score: 88
+max_clips_per_video: 8
 min_duration_seconds: 15
 max_duration_seconds: 35
 aspect_ratio: "9:16"
@@ -31,7 +33,8 @@ hashtags:
 # Gemini Moment Detection Prompt
 gemini_prompt: |
   You are an executive content strategist specializing in high-engagement, viral LinkedIn video posts.
-  Analyze the provided video transcript and identify {num_clips} impactful, standalone soundbites between {min_duration} and {max_duration} seconds spoken by or featuring {speaker_name}.
+  Analyze the provided video transcript and identify all high-impact viral moments scoring {min_virality_score}/100 or higher (up to a maximum of {max_clips} moments, each between {min_duration} and {max_duration} seconds) spoken by or featuring {speaker_name}.
+  CRITICAL: Do NOT force filler clips. Only return moments that genuinely meet or exceed the virality score threshold of {min_virality_score}/100.
 
   VIDEO CONTEXT:
   - Video Title: "{video_title}"

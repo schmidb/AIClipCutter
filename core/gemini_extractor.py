@@ -42,12 +42,16 @@ def extract_viral_moments(
 
     model_to_use = preset_config.get("gemini_model", model_name)
     num_clips = preset_config.get("clips_per_video", 6)
+    min_virality = int(preset_config.get("min_virality_score", 85))
+    max_clips = int(preset_config.get("max_clips_per_video", num_clips or 8))
     min_dur = preset_config.get("min_duration_seconds", 10)
     max_dur = preset_config.get("max_duration_seconds", 20)
     system_prompt = preset_config.get("gemini_prompt", "")
     
     formatted_prompt = (
-        system_prompt.replace("{num_clips}", str(num_clips))
+        system_prompt.replace("{num_clips}", str(max_clips))
+        .replace("{max_clips}", str(max_clips))
+        .replace("{min_virality_score}", str(min_virality))
         .replace("{min_duration}", str(min_dur))
         .replace("{max_duration}", str(max_dur))
         .replace("{speaker_name}", speaker_name or "the speaker")
@@ -58,7 +62,7 @@ def extract_viral_moments(
     full_request = f"{formatted_prompt}\n\n=== FULL VIDEO TRANSCRIPT WITH TIMESTAMPS ===\n{transcript_text}"
 
     speaker_log = f" for '{speaker_name}'" if speaker_name else ""
-    print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}){speaker_log} for {num_clips} clips ({min_dur}-{max_dur}s)...")
+    print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}){speaker_log} for viral moments (threshold >= {min_virality}%, max {max_clips} clips, {min_dur}-{max_dur}s)...")
     
     temp_to_use = float(preset_config.get("temperature", 0.75))
     response = client.models.generate_content(
@@ -81,8 +85,22 @@ def extract_viral_moments(
             text = text[:-3]
         clips = json.loads(text.strip())
 
-    # Attach metadata to each moment
-    for clip in clips:
+    # Filter and sort clips by virality score
+    filtered_clips = [
+        c for c in clips if float(c.get("virality_score", 0)) >= min_virality
+    ]
+    if not filtered_clips:
+        print(f"[Gemini Extractor] Notice: No clips met threshold >={min_virality}. Keeping top moments.")
+        clips.sort(key=lambda x: float(x.get("virality_score", 0)), reverse=True)
+        filtered_clips = clips[:max_clips]
+    else:
+        # Sort descending by virality score so highest-quality moments come first
+        filtered_clips.sort(key=lambda x: float(x.get("virality_score", 0)), reverse=True)
+        filtered_clips = filtered_clips[:max_clips]
+
+    # Re-index and attach metadata to each moment
+    for idx, clip in enumerate(filtered_clips, 1):
+        clip["clip_index"] = idx
         if speaker_name:
             clip["speaker"] = speaker_name
         if full_video_url:
@@ -90,8 +108,9 @@ def extract_viral_moments(
         if video_title:
             clip["source_video_title"] = video_title
 
-    print(f"[Gemini Extractor] Successfully identified {len(clips)} viral moments.")
-    return clips
+    scores_str = ", ".join(f"#{c['clip_index']}:{c.get('virality_score')}" for c in filtered_clips)
+    print(f"[Gemini Extractor] Successfully identified {len(filtered_clips)} viral moments ({scores_str}).")
+    return filtered_clips
 
 
 if __name__ == "__main__":
