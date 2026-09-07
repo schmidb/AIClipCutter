@@ -64,7 +64,7 @@ This document outlines the end-to-end plan to build and deploy **AIClipCutter**,
   * GPU-accelerated video rendering & subtitle burning (`FFmpeg` using NVENC `h264_nvenc`).
 * **Cost Efficiency:** A single 15-minute video processes in ~2–3 minutes on an L4 GPU. Processing all 10 videos will take under 45 minutes of VM runtime, consuming just a few dollars of your cloud credits.
 
-### B. Intelligence: Google Vertex AI (Gemini 2.5 / 3.0)
+### B. Intelligence: Google Vertex AI (Gemini 3.8 Flash)
 * Gemini analyzes full transcripts with word timestamps.
 * Generates structured JSON output with exact timestamps, hook headlines, virality scores, and platform-specific post descriptions.
 

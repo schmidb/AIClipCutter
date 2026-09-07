@@ -90,7 +90,7 @@ def step_download(url: str, work_dir: Path) -> tuple[Path, Path]:
 def step_moments(vtt_path: Path, work_dir: Path, preset_path: str, clips_count: int) -> list:
     """Step 2: AI Moment Detection with Google Gemini Vertex AI."""
     print("\n" + "=" * 60)
-    print("🧠 STEP 2: AI Moment Hunter (Google Gemini 2.5 / Vertex AI)")
+    print("🧠 STEP 2: AI Moment Hunter (Google Gemini 3.8 Flash / Vertex AI)")
     print("=" * 60)
 
     moments_file = work_dir / "moments.json"

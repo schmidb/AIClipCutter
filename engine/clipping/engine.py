@@ -1237,10 +1237,12 @@ def analyze_with_gemini(
             cred_path = os.path.abspath("../config/gcp_service_account_key.json")
         if os.path.exists(cred_path):
             os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
+        model_name = getattr(cfg, "gemini_model", "gemini-3.8-flash")
+        loc = "global" if ("3.8" in model_name or "3.7" in model_name) else "us-central1"
         client = genai.Client(
             vertexai=True,
             project=getattr(cfg, "gcp_project", "aiclipcutter-batch-7821"),
-            location="us-central1",
+            location=getattr(cfg, "gcp_location", loc),
         )
 
     gemini_config = types.GenerateContentConfig(

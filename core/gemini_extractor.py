@@ -23,8 +23,8 @@ def extract_viral_moments(
     transcript_text: str,
     preset_config: Dict[str, Any],
     project_id: str = "aiclipcutter-batch-7821",
-    location: str = "us-central1",
-    model_name: str = "gemini-2.5-flash"
+    location: str = "global",
+    model_name: str = "gemini-3.8-flash"
 ) -> List[Dict[str, Any]]:
     """
     Sends the video transcript to Gemini on Vertex AI and parses structured clips.
@@ -34,7 +34,8 @@ def extract_viral_moments(
     if credentials_path.exists():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
-    client = genai.Client(vertexai=True, project=project_id, location=location)
+    location_to_use = preset_config.get("gemini_location", location)
+    client = genai.Client(vertexai=True, project=project_id, location=location_to_use)
 
     model_to_use = preset_config.get("gemini_model", model_name)
     num_clips = preset_config.get("clips_per_video", 6)
