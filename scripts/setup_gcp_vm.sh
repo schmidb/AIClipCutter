@@ -45,7 +45,12 @@ python run_batch.py --playlist config/playlist_tedx.json --preset tedx
 gsutil -m cp -r outputs/* gs://aiclipcutter-media-7821/clips/ || true
 gsutil cp output/ghl_social_planner_schedule.csv gs://aiclipcutter-media-7821/ || true
 
-echo ">>> [5/5] Batch processing complete. Automatically powering off VM..."
-# Power off the VM to avoid burning unnecessary credits
-poweroff
+echo ">>> [5/5] Batch processing complete. Automatically terminating VM..."
+ZONE=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/zone | awk -F/ '{print $NF}' || echo "")
+NAME=$(hostname)
+if [ -n "$ZONE" ]; then
+    gcloud compute instances delete "$NAME" --zone="$ZONE" --quiet || poweroff
+else
+    poweroff
+fi
 

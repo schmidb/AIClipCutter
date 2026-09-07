@@ -35,6 +35,8 @@ def launch_vm(
         "--boot-disk-type=pd-ssd",
         "--scopes=cloud-platform",
         f"--service-account=aiclipcutter-sa@{PROJECT_ID}.iam.gserviceaccount.com",
+        "--max-run-duration=2h",
+        "--instance-termination-action=DELETE",
         f"--metadata-from-file=startup-script={startup_script}"
     ]
 
