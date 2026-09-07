@@ -50,10 +50,139 @@ def format_ass_time(seconds: float) -> str:
 
 
 def clean_vtt_line(text: str) -> str:
-    """Strips WebVTT inline tags like <00:00:19.680><c> and HTML tags."""
+    """Strips WebVTT inline tags like <00:00:19.680><c> and HTML tags/entities."""
     text = re.sub(r"<[^>]+>", "", text)
-    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&[a-z]+;|[><»«]", " ", text)
     return " ".join(text.split())
+
+
+def parse_vtt_cues_robust(vtt_path: Path) -> List[Tuple[float, float, str]]:
+    """
+    Robust line-by-line WebVTT parser that handles irregular spacing,
+    empty cues, and YouTube auto-caption formats without dropping lines.
+    Returns list of (start_seconds, end_seconds, cleaned_text).
+    """
+    if not vtt_path or not vtt_path.exists():
+        return []
+
+    with open(vtt_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    cues = []
+    cur_time = None
+    cur_text = []
+
+    for line in content.splitlines():
+        m = re.match(r"(\d+:\d+:[\d\.]+|\d+:[\d\.]+)\s*-->\s*(\d+:\d+:[\d\.]+|\d+:[\d\.]+)", line)
+        if m:
+            if cur_time and cur_text:
+                c_start = parse_vtt_time(cur_time[0])
+                c_end = parse_vtt_time(cur_time[1])
+                combined = " ".join(cur_text).strip()
+                if combined:
+                    cues.append((c_start, c_end, combined))
+            cur_time = (m.group(1), m.group(2))
+            cur_text = []
+        elif cur_time and line.strip():
+            cleaned = clean_vtt_line(line)
+            if cleaned:
+                cur_text.append(cleaned)
+
+    if cur_time and cur_text:
+        c_start = parse_vtt_time(cur_time[0])
+        c_end = parse_vtt_time(cur_time[1])
+        combined = " ".join(cur_text).strip()
+        if combined:
+            cues.append((c_start, c_end, combined))
+
+    return cues
+
+
+def snap_clip_boundaries(
+    vtt_path: Path,
+    start_time: float,
+    end_time: float,
+    spoken_opening: str = "",
+    lead_in: float = 0.35,
+    lead_out: float = 0.35
+) -> Tuple[float, float]:
+    """
+    Snaps LLM-estimated start/end timestamps to actual spoken word boundaries in the VTT.
+    Applies an acoustic lead-in pre-roll (default 0.35s) so the speaker's vocal attack, breath,
+    and opening consonants are preserved in full, clamped to the preceding sentence end.
+    Also applies a lead-out buffer (default 0.35s) so the outro word decay is not cut abruptly.
+    """
+    cues = parse_vtt_cues_robust(vtt_path)
+    if not cues:
+        return max(0.0, round(start_time - lead_in, 3)), round(end_time + lead_out, 3)
+
+    # 1. Snap Start Time
+    words = re.findall(r"\b\w+\b", spoken_opening.lower()) if spoken_opening else []
+    first_word = words[0] if words else ""
+    second_word = words[1] if len(words) > 1 else ""
+
+    start_cue_idx = None
+
+    # Strategy A: Match opening words within +- 6 seconds of start_time
+    if first_word:
+        candidates = []
+        for i, (cs, ce, txt) in enumerate(cues):
+            if abs(cs - start_time) < 6.0:
+                txt_lower = txt.lower()
+                if first_word in txt_lower:
+                    score = 0 if (second_word and second_word in txt_lower) else 1
+                    # In YouTube rolling subs, pick the EARLIEST cue where the phrase appears
+                    candidates.append((score, cs, i))
+        if candidates:
+            candidates.sort(key=lambda x: (x[0], x[1]))
+            start_cue_idx = candidates[0][2]
+
+    # Strategy B: If start_time lands inside a cue, snap to that cue's start
+    if start_cue_idx is None:
+        for i, (cs, ce, txt) in enumerate(cues):
+            if cs <= start_time <= ce:
+                start_cue_idx = i
+                break
+
+    # Strategy C: Closest cue within 3 seconds
+    if start_cue_idx is None:
+        closest = min(range(len(cues)), key=lambda i: abs(cues[i][0] - start_time))
+        if abs(cues[closest][0] - start_time) < 3.0:
+            start_cue_idx = closest
+
+    if start_cue_idx is not None:
+        raw_start = cues[start_cue_idx][0]
+        # Check previous cue end time to avoid bleeding into prior sentence
+        prev_end = cues[start_cue_idx - 1][1] if start_cue_idx > 0 else 0.0
+        if prev_end < raw_start:
+            snapped_start = max(raw_start - lead_in, prev_end + 0.02)
+        else:
+            snapped_start = raw_start - lead_in
+        snapped_start = round(max(0.0, snapped_start), 3)
+    else:
+        snapped_start = max(0.0, round(start_time - lead_in, 3))
+
+    # 2. Snap End Time
+    end_cue_idx = None
+    for i, (cs, ce, txt) in enumerate(cues):
+        if cs <= end_time <= ce:
+            end_cue_idx = i
+            break
+        elif abs(ce - end_time) < 2.0:
+            end_cue_idx = i
+
+    if end_cue_idx is not None:
+        raw_end = cues[end_cue_idx][1]
+        next_start = cues[end_cue_idx + 1][0] if end_cue_idx + 1 < len(cues) else raw_end + 10.0
+        if next_start > raw_end:
+            snapped_end = min(raw_end + lead_out, next_start - 0.05)
+        else:
+            snapped_end = raw_end + lead_out
+        snapped_end = round(snapped_end, 3)
+    else:
+        snapped_end = round(end_time + lead_out, 3)
+
+    return snapped_start, snapped_end
 
 
 def extract_clip_vtt_cues(vtt_path: Path, start_time: float, end_time: float) -> List[Dict[str, Any]]:
@@ -61,47 +190,24 @@ def extract_clip_vtt_cues(vtt_path: Path, start_time: float, end_time: float) ->
     Extracts raw spoken dialogue cues from WebVTT file within [start_time, end_time].
     Returns list of dicts with relative start/end times and text.
     """
-    if not vtt_path.exists():
+    cues_raw = parse_vtt_cues_robust(vtt_path)
+    if not cues_raw:
         return []
 
-    with open(vtt_path, "r", encoding="utf-8", errors="ignore") as f:
-        content = f.read()
-
-    blocks = re.split(r"\n\s*\n", content)
     cues = []
     seen_texts = set()
 
-    for block in blocks:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
-        if not lines:
-            continue
-
-        time_match = None
-        text_lines = []
-        for line in lines:
-            m = re.match(r"(\d+:\d+:[\d\.]+|\d+:[\d\.]+)\s*-->\s*(\d+:\d+:[\d\.]+|\d+:[\d\.]+)", line)
-            if m:
-                time_match = m
-            elif time_match:
-                cleaned = clean_vtt_line(line)
-                if cleaned and cleaned not in seen_texts:
-                    text_lines.append(cleaned)
-                    seen_texts.add(cleaned)
-
-        if time_match and text_lines:
-            c_start = parse_vtt_time(time_match.group(1))
-            c_end = parse_vtt_time(time_match.group(2))
-
-            if c_end > start_time and c_start < end_time:
-                rel_start = max(0.0, c_start - start_time)
-                rel_end = min(end_time - start_time, c_end - start_time)
-                combined_text = " ".join(text_lines)
-                if combined_text:
-                    cues.append({
-                        "start": round(rel_start, 2),
-                        "end": round(rel_end, 2),
-                        "text": combined_text
-                    })
+    for c_start, c_end, combined_text in cues_raw:
+        if c_end > start_time and c_start < end_time:
+            rel_start = max(0.0, c_start - start_time)
+            rel_end = min(end_time - start_time, c_end - start_time)
+            if combined_text and combined_text not in seen_texts:
+                seen_texts.add(combined_text)
+                cues.append({
+                    "start": round(rel_start, 2),
+                    "end": round(rel_end, 2),
+                    "text": combined_text
+                })
 
     return cues
 

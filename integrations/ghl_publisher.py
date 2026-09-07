@@ -260,6 +260,10 @@ def format_ghl_csv(
     """
     if start_date is None:
         start_date = datetime.now() + timedelta(days=1)
+    
+    current_schedule_time = start_date.replace(
+        hour=post_time_hour, minute=post_time_minute, second=0, microsecond=0
+    )
 
     total_clips = len(clips_data)
     schedule_dates = []
@@ -285,6 +289,7 @@ def format_ghl_csv(
     ghl_rows = []
     metadata_rows = []
     for i, clip in enumerate(clips_data):
+        schedule_str = current_schedule_time.strftime("%Y-%m-%d %H:%M:%S")
         schedule_time = schedule_dates[i]
         schedule_str = schedule_time.strftime("%Y-%m-%d %H:%M:%S")
         
@@ -346,6 +351,9 @@ def format_ghl_csv(
             "Duration (sec)": clip.get("duration", 0),
             "Source Video": clip.get("source_video_title", "")
         })
+        
+        # Advance schedule date for the next post
+        current_schedule_time += timedelta(days=post_interval_days)
 
     # Write GHL Social Planner compliant CSV
     output_path = Path(output_csv_path)

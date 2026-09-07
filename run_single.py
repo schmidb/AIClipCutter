@@ -30,7 +30,7 @@ from pathlib import Path
 
 from core.gemini_extractor import extract_viral_moments
 from core.compositor import render_vertical_clip
-from core.subtitles import extract_clip_vtt_cues, polish_subtitles_with_gemini, generate_ass_file
+from core.subtitles import extract_clip_vtt_cues, polish_subtitles_with_gemini, generate_ass_file, snap_clip_boundaries
 from integrations.ghl_publisher import format_ghl_csv
 
 
@@ -172,10 +172,10 @@ def step_moments(
     return moments
 
 
-def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
-    """Step 3: Cut and render 9:16 vertical MP4 video clips."""
+def step_render(source_video: Path, moments: list, work_dir: Path, force_rerender: bool = False) -> list:
+    """Step 3: Cut and render 9:16 vertical MP4 video clips with VTT speech-boundary snapping."""
     print("\n" + "=" * 60)
-    print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (AI Smart Centering + Subtitles + FFmpeg)")
+    print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (Speech Snapping + AI Smart Centering + Subtitles + FFmpeg)")
     print("=" * 60)
 
     rendered_clips = []
@@ -194,11 +194,35 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
         clip_idx = m.get("clip_index", i)
         clip_name = f"clip_{clip_idx}.mp4"
         clip_path = clips_dir / clip_name
-        start_t = float(m.get("start_time", 0))
-        end_t = float(m.get("end_time", start_t + 15))
-        duration = end_t - start_t
+        orig_start = float(m.get("start_time", 0))
+        orig_end = float(m.get("end_time", orig_start + 15))
+        spoken_opening = m.get("spoken_opening", "")
+
+        # Intelligent VTT speech boundary snapping with acoustic pre-roll cushion
+        start_t = orig_start
+        end_t = orig_end
+        if vtt_path and vtt_path.exists():
+            snapped_s, snapped_e = snap_clip_boundaries(
+                vtt_path=vtt_path,
+                start_time=orig_start,
+                end_time=orig_end,
+                spoken_opening=spoken_opening,
+                lead_in=0.35,
+                lead_out=0.35
+            )
+            if snapped_s != orig_start or snapped_e != orig_end:
+                diff_ms = (orig_start - snapped_s) * 1000
+                print(f"\n⏱️ Clip #{clip_idx}: Snapped to Speech Boundary: {orig_start:.2f}s -> {snapped_s:.2f}s ({diff_ms:+.0f}ms pre-roll), end={orig_end:.2f}s -> {snapped_e:.2f}s")
+                start_t = snapped_s
+                end_t = snapped_e
+                m["start_time"] = start_t
+                m["end_time"] = end_t
+
+        duration = round(end_t - start_t, 2)
+        m["duration"] = duration
         hook = m.get("hook_banner", "")
-        if clip_path.exists() and clip_path.stat().st_size > 500000:
+
+        if not force_rerender and clip_path.exists() and clip_path.stat().st_size > 500000:
             print(f"\n🎬 Clip #{clip_idx}/{len(moments)} already rendered: {clip_name} ({clip_path.stat().st_size / 1024 / 1024:.2f} MB)")
             clip_meta = dict(m)
             clip_meta["local_path"] = str(clip_path)
@@ -211,6 +235,7 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
 
         print(f"\n🎬 Rendering Clip #{clip_idx}/{len(moments)}: {clip_name}")
         print(f"   Time Range: {start_t:.2f}s -> {end_t:.2f}s ({duration:.1f}s)")
+        print(f"   Opening:    \"{spoken_opening[:50]}\"")
         print(f"   Hook:       {hook}")
 
         # AI Subtitle Polishing (Fix typos, Irish place names, verbal stutters)
@@ -243,6 +268,14 @@ def step_render(source_video: Path, moments: list, work_dir: Path) -> list:
                 clip_meta["cover_path"] = str(cover_file)
             clip_meta["duration"] = round(duration, 2)
             rendered_clips.append(clip_meta)
+
+    # Persist updated moment boundaries to moments.json
+    try:
+        moments_file = work_dir / "moments.json"
+        with open(moments_file, "w", encoding="utf-8") as f:
+            json.dump(moments, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️ Warning saving updated moments.json: {e}")
 
     # Clean up temp subtitles
     import shutil
@@ -322,7 +355,8 @@ def process_single_video(
     video_title: str = "",
     speaker: str = "",
     platform: str = None,
-    min_virality: int = None
+    min_virality: int = None,
+    force_rerender: bool = False
 ) -> list:
     """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
     video_id = extract_video_id(url)
@@ -404,7 +438,7 @@ def process_single_video(
                 full_video_url=full_video_url,
                 min_virality=min_virality
             )
-        rendered_clips = step_render(source_video, moments, work_dir)
+        rendered_clips = step_render(source_video, moments, work_dir, force_rerender=force_rerender)
 
     if step in ["all", "ghl"]:
         if not rendered_clips:
@@ -445,6 +479,7 @@ def main():
     parser.add_argument("--platform", default="", help="Target platform (Instagram, LinkedIn, or auto)")
     parser.add_argument("--clips", type=int, default=None, help="Target number of clips to produce")
     parser.add_argument("--min-virality", type=int, default=None, help="Minimum virality score threshold (0-100)")
+    parser.add_argument("--force", action="store_true", help="Force re-rendering even if clip files already exist")
     parser.add_argument(
         "--step",
         default="all",
@@ -460,7 +495,8 @@ def main():
         video_title=args.title,
         speaker=args.speaker,
         platform=args.platform or None,
-        min_virality=args.min_virality
+        min_virality=args.min_virality,
+        force_rerender=args.force
     )
 
 

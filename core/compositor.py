@@ -197,9 +197,9 @@ def render_vertical_clip(
 
     duration = max(0.5, end_time - start_time)
 
-    # 5. Broadcast Audio Processing: Stage Rumble Cut (80Hz) + -14 LUFS Loudness + 0.4s Smooth Outro Fade
+    # 5. Broadcast Audio Processing: Stage Rumble Cut (80Hz) + -14 LUFS Loudness + 0.08s Micro-Fade-In + 0.4s Smooth Outro Fade
     fade_start = max(0.1, duration - 0.4)
-    audio_filter = f"highpass=f=80,loudnorm=I=-14:LRA=11:TP=-1.5,afade=t=out:st={fade_start:.2f}:d=0.4"
+    audio_filter = f"highpass=f=80,loudnorm=I=-14:LRA=11:TP=-1.5,afade=t=in:st=0:d=0.08,afade=t=out:st={fade_start:.2f}:d=0.4"
 
     cmd = [
         "ffmpeg",
