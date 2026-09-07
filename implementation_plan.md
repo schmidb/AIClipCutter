@@ -4,6 +4,16 @@ Transform long-form YouTube videos (10–15 min each) into 50–70 high-retentio
 
 ---
 
+## 🏗️ Core Engine: `NaufalRizqullah/opensource-clipping`
+
+The entire video cutting, reframing, and rendering engine is powered by **`NaufalRizqullah/opensource-clipping`**, located inside [`engine/`](file:///c:/GitDev/AIClipCutter/engine/):
+* **Face Tracking & 9:16 Auto-Centering:** Google MediaPipe BlazeFace & Ultralytics YOLOv8.
+* **Kinetic Subtitles:** Dynamic `.ass` generator with Hormozi-style active word highlighting.
+* **Hook V2:** Multi-hook flash/glitch teaser intro generator.
+* **Customizations Added:** Dynamic 10–20s duration constraints (`--min-duration`, `--max-duration`), TEDx Glenbeigh 2027 and LinkedIn content presets (`--preset`), Google Cloud Vertex AI authentication, and automatic GoHighLevel Social Planner CSV export.
+
+---
+
 ## 1. Execution Model: On-Demand Batch Processing
 
 > [!IMPORTANT]
