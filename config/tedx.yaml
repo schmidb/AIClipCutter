@@ -6,9 +6,9 @@ gemini_model: "gemini-3.8-flash"  # Active model for viral moment detection
 temperature: 0.75
 
 # Clip Constraints & Virality Thresholds
-clips_per_video: 6
+clips_per_video: 8
 min_virality_score: 88
-max_clips_per_video: 8
+max_clips_per_video: 10
 min_duration_seconds: 10
 max_duration_seconds: 20
 aspect_ratio: "9:16"
@@ -39,7 +39,7 @@ hashtags:
 gemini_prompt: |
   You are an expert viral short-form video editor specializing in TEDx talks and Instagram Reels.
   Analyze the provided video transcript and identify all high-impact viral moments scoring {min_virality_score}/100 or higher (up to a maximum of {max_clips} moments, each strictly between {min_duration} and {max_duration} seconds).
-  CRITICAL: Do NOT force low-quality moments or filler clips just to reach a count. Only return moments that genuinely meet or exceed the virality score threshold of {min_virality_score}/100. If only 3 moments qualify, return 3. If 7 qualify, return 7.
+  CRITICAL: Do NOT force low-quality moments or filler clips just to reach a count. Only return moments that genuinely meet or exceed the virality score threshold of {min_virality_score}/100. If only 4 moments qualify, return 4. If 8 or 9 qualify, return 8 or 9.
 
   VIDEO CONTEXT:
   - Speaker: {speaker_name}
@@ -56,12 +56,14 @@ gemini_prompt: |
 
   HIGH CREATIVITY & ANTI-FATIGUE MANDATE:
   Every single post caption must have a distinct angle and structure. DO NOT use repetitive boilerplate!
-  Assign each clip one of the following 5 content angles:
+  Classify each clip into whichever of the following 5 content angles best describes its narrative hook:
   - Angle 1 (The Contrarian Take): Challenge a widespread belief or conventional wisdom.
   - Angle 2 (The Tactical Framework): A clear, actionable shift or lesson the viewer can apply today.
   - Angle 3 (The Personal Epiphany): An emotional, relatable moment of vulnerability or breakthrough.
   - Angle 4 (The Debate / Thought Provoker): A profound question urging viewers to reflect and comment.
   - Angle 5 (The Minimalist Soundbite): Laser-focused, poetic 2-line quote that leaves a lasting impression.
+
+  IMPORTANT: Multiple clips CAN share the same angle! For example, if the talk contains two powerful "Contrarian Takes" or three actionable "Tactical Frameworks", include ALL of them as long as each one meets the {min_virality_score}/100 virality threshold. Extract up to {max_clips} moments across the entire talk.
 
   OUTPUT FORMAT (Strict JSON Array):
   [

@@ -6,9 +6,9 @@ gemini_model: "gemini-3.8-flash"  # Active model on Vertex AI
 temperature: 0.75
 
 # Clip Constraints & Virality Thresholds
-clips_per_video: 5
+clips_per_video: 8
 min_virality_score: 88
-max_clips_per_video: 8
+max_clips_per_video: 10
 min_duration_seconds: 15
 max_duration_seconds: 35
 aspect_ratio: "9:16"
@@ -49,12 +49,14 @@ gemini_prompt: |
 
   HIGH CREATIVITY & ANTI-FATIGUE MANDATE:
   Every single post copy must have a distinct angle and structure. DO NOT use repetitive boilerplate!
-  Assign each clip one of the following 5 content angles:
+  Classify each clip into whichever of the following 5 content angles best describes it:
   - Angle 1 (The Contrarian Reframe): Challenge an industry orthodoxy or enterprise myth.
   - Angle 2 (The Tactical Architecture/Playbook): Concrete engineering, data, or leadership guidance.
   - Angle 3 (The Executive Epiphany / War Story): A personal experience, breakthrough, or lesson learned.
   - Angle 4 (The Strategic Dilemma / Open Question): A high-level decision facing founders and CIOs today.
   - Angle 5 (The Minimalist Principle): A concise, punchy 2-sentence truth about the AI paradigm shift.
+
+  IMPORTANT: Multiple clips CAN share the same angle! If the conversation contains multiple tactical frameworks or war stories, include ALL of them as long as each one meets the {min_virality_score}/100 virality threshold. Extract up to {max_clips} moments across the full video.
 
   OUTPUT FORMAT (Strict JSON Array):
   [

@@ -97,7 +97,7 @@ def main():
     parser.add_argument("--playlist", default="config/playlist_tedx.json", help="Playlist JSON file")
     parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
     parser.add_argument("--platform", default="", help="Target platform (Instagram, LinkedIn, or auto)")
-    parser.add_argument("--clips", type=int, default=6, help="Clips per video (default: 6)")
+    parser.add_argument("--clips", type=int, default=None, help="Target clips per video (default: None, dynamic by virality threshold)")
     parser.add_argument("--min-duration", type=int, default=10, help="Min duration in seconds")
     parser.add_argument("--max-duration", type=int, default=20, help="Max duration in seconds")
     parser.add_argument("--max-videos", type=int, default=None, help="Limit number of playlist videos to process")
