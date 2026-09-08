@@ -1,24 +1,73 @@
-# Credentials & Keys
+# ==============================================================================
+# AIClipCutter — .gitignore
+# ==============================================================================
+
+# Credentials & Secrets (NEVER COMMIT)
 config/gcp_service_account_key.json
+*service_account*.json
+*credentials*.json
 *.json.key
+*.pem
+*.key
+*.p12
 .env
 *.env
+*.env.local
 
-# Outputs & Temporary Video Files
+# Outputs, Renders & Generated Media
 output/
 outputs/
 downloads/
 temp/
+_temp_*
 *.mp4
 *.wav
 *.mp3
+*.m4a
 *.ass
 *.srt
+*.part
+*.y4m
 
-# Python
+# Python Build & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+env/
 venv/
 .venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
+# Operating System Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Editors & IDEs (Keep workspace settings, ignore user state)
+.idea/
+*.swp
+*.swo
+*~
+.vscode/*.log

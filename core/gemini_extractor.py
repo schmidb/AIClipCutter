@@ -9,7 +9,7 @@ import os
 import json
 import yaml
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from google import genai
 from google.genai import types
 
@@ -19,10 +19,29 @@ def load_preset(preset_path: str) -> Dict[str, Any]:
         return yaml.safe_load(f)
 
 
+def resolve_gcp_project_id(explicit_id: Optional[str] = None) -> str:
+    """Resolves GCP Project ID from explicit argument, environment variable, or service account JSON."""
+    if explicit_id:
+        return explicit_id
+    env_id = os.getenv("GCP_PROJECT_ID")
+    if env_id:
+        return env_id
+    cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/gcp_service_account_key.json")
+    cred_path = Path(cred_env)
+    if cred_path.exists():
+        try:
+            with open(cred_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("project_id", "")
+        except Exception:
+            pass
+    return "your-gcp-project-id"
+
+
 def extract_viral_moments(
     transcript_text: str,
     preset_config: Dict[str, Any],
-    project_id: str = "aiclipcutter-batch-7821",
+    project_id: Optional[str] = None,
     location: str = "global",
     model_name: str = "gemini-3.8-flash",
     speaker_name: str = "",
@@ -32,8 +51,10 @@ def extract_viral_moments(
     """
     Sends the video transcript to Gemini on Vertex AI and parses structured clips.
     """
+    project_id = resolve_gcp_project_id(project_id)
+
     # Configure Vertex AI client
-    credentials_path = Path("config/gcp_service_account_key.json")
+    credentials_path = Path(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/gcp_service_account_key.json"))
     if credentials_path.exists():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
@@ -43,7 +64,7 @@ def extract_viral_moments(
         vertexai=True,
         project=project_id,
         location=location_to_use,
-        http_options=types.HttpOptions(timeout=60000)
+        http_options=types.HttpOptions(timeout=180000)
     )
 
     model_to_use = preset_config.get("gemini_model", model_name)
@@ -71,14 +92,28 @@ def extract_viral_moments(
     print(f"[Gemini Extractor] Querying Vertex AI ({model_to_use}){speaker_log} for viral moments (threshold >= {min_virality}%, max {max_clips} clips, {min_dur}-{max_dur}s)...")
     
     temp_to_use = float(preset_config.get("temperature", 0.75))
-    response = client.models.generate_content(
-        model=model_to_use,
-        contents=full_request,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=temp_to_use
-        )
-    )
+    import time
+    response = None
+    last_err = None
+    for attempt in range(1, 4):
+        try:
+            response = client.models.generate_content(
+                model=model_to_use,
+                contents=full_request,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=temp_to_use
+                )
+            )
+            if response and response.text:
+                break
+        except Exception as e:
+            last_err = e
+            print(f"[Gemini Extractor] Attempt {attempt}/3 encountered {type(e).__name__}: {e}. Retrying in {attempt * 6}s...")
+            time.sleep(attempt * 6)
+
+    if not response or not response.text:
+        raise last_err or RuntimeError("Gemini failed to generate moments after 3 attempts.")
 
     try:
         clips = json.loads(response.text)

@@ -23,6 +23,7 @@ from integrations.ghl_publisher import format_ghl_csv
 def create_master_ghl_schedule(
     all_rendered_items: list,
     output_csv_path: Path,
+    master_clips_dir: Optional[Path] = None,
     platform: str = "Instagram",
     start_date: datetime = None,
     end_date: datetime = None,
@@ -52,8 +53,9 @@ def create_master_ghl_schedule(
         platform=platform
     )
 
-    # Automatically organize sequential master clips into output/ghl_master_clips/
-    master_clips_dir = output_csv_path.parent / "ghl_master_clips"
+    # Automatically organize sequential master clips into master_clips_dir
+    if master_clips_dir is None:
+        master_clips_dir = output_csv_path.parent / "ghl_master_clips"
     master_clips_dir.mkdir(parents=True, exist_ok=True)
     for idx, item in enumerate(all_rendered_items, 1):
         src_path = Path(item.get("media_url", ""))
@@ -76,7 +78,7 @@ def main():
     parser = argparse.ArgumentParser(description="AIClipCutter Batch Pipeline")
     parser.add_argument("--url", help="Single video URL to process")
     parser.add_argument("--playlist", default="config/playlist_tedx.json", help="Playlist JSON file")
-    parser.add_argument("--preset", default="config/tedx.yaml", help="Path to preset YAML configuration")
+    parser.add_argument("--preset", default=None, help="Path to preset YAML configuration")
     parser.add_argument("--platform", default="", help="Target platform (Instagram, LinkedIn, or auto)")
     parser.add_argument("--clips", type=int, default=None, help="Target clips per video (default: None, dynamic by virality threshold)")
     parser.add_argument("--min-duration", type=int, default=10, help="Min duration in seconds")
@@ -84,13 +86,13 @@ def main():
     parser.add_argument("--max-videos", type=int, default=None, help="Limit number of playlist videos to process")
     parser.add_argument("--min-virality", type=int, default=None, help="Minimum virality score threshold (0-100)")
     parser.add_argument("--force", action="store_true", help="Force re-rendering clips even if they already exist")
-    parser.add_argument("--start-date", default="2026-09-15", help="Start date for master schedule (YYYY-MM-DD)")
-    parser.add_argument("--end-date", default="2026-12-24", help="End date for master schedule (YYYY-MM-DD)")
+    parser.add_argument("--start-date", default=None, help="Start date for master schedule (YYYY-MM-DD)")
+    parser.add_argument("--end-date", default=None, help="End date for master schedule (YYYY-MM-DD)")
     parser.add_argument("--no-mix", action="store_true", help="Disable round-robin speaker mixing in master playlist")
+    parser.add_argument("--output-dir", help="Base directory for video processing files (default: output/markus for Markus/LinkedIn, else output)")
+    parser.add_argument("--master-csv", help="Custom path for master GoHighLevel schedule CSV")
+    parser.add_argument("--master-clips-dir", help="Custom directory for master sequential clips")
     args = parser.parse_args()
-
-    if args.preset in ["tedx", "linkedin", "miriam"]:
-        args.preset = f"config/{args.preset}.yaml"
 
     # Determine videos to run
     video_targets = []
@@ -109,20 +111,43 @@ def main():
         print("❌ Error: Please specify --url or --playlist")
         sys.exit(1)
 
+    chosen_preset = args.preset or playlist_meta.get("preset", "config/tedx.yaml")
+    if chosen_preset in ["tedx", "linkedin", "miriam"]:
+        chosen_preset = f"config/{chosen_preset}.yaml"
+
     target_platform = (
         args.platform
         or (playlist_meta.get("platform") if isinstance(playlist_meta, dict) else "")
-        or ("LinkedIn" if "linkedin" in args.preset.lower() else "Instagram")
+        or ("LinkedIn" if "linkedin" in chosen_preset.lower() else "Instagram")
+    )
+
+    is_markus_or_linkedin = (
+        "markus" in str(args.playlist).lower()
+        or "linkedin" in chosen_preset.lower()
+        or target_platform.lower() == "linkedin"
+    )
+
+    base_output_dir = Path(args.output_dir) if args.output_dir else (
+        Path("output/markus") if is_markus_or_linkedin else Path("output")
+    )
+    master_csv = Path(args.master_csv) if args.master_csv else (
+        Path("output/ghl_markus_schedule.csv") if is_markus_or_linkedin else Path("output/ghl_master_playlist_schedule.csv")
+    )
+    master_clips_dir = Path(args.master_clips_dir) if args.master_clips_dir else (
+        Path("output/ghl_markus_clips") if is_markus_or_linkedin else Path("output/ghl_master_clips")
     )
 
     print("\n" + "=" * 70)
     print("🚀 AIClipCutter Batch Processing")
     print(f"Platform:       {target_platform}")
-    print(f"Preset:         {args.preset}")
+    print(f"Preset:         {chosen_preset}")
     print(f"Total Videos:   {len(video_targets)}")
     print(f"Clips / Video:  {args.clips or 'Dynamic (by Virality Threshold)'}")
     if args.min_virality:
         print(f"Virality Cut:   >= {args.min_virality}%")
+    print(f"Output Dir:     {base_output_dir.resolve()}")
+    print(f"Master CSV:     {master_csv.resolve()}")
+    print(f"Master Clips:   {master_clips_dir.resolve()}")
     print(f"Centering:      AI Smart Centering (Gemini 3.8 Flash Vision)")
     print("=" * 70)
 
@@ -138,14 +163,15 @@ def main():
 
         clips = process_single_video(
             url=v_url,
-            preset=args.preset,
+            preset=chosen_preset,
             clips=args.clips,
             step="all",
             video_title=v_title,
             speaker=v_speaker,
             platform=target_platform,
             min_virality=args.min_virality,
-            force_rerender=args.force
+            force_rerender=args.force,
+            output_dir=base_output_dir
         )
         for c in clips:
             all_master_items.append({
@@ -163,18 +189,22 @@ def main():
             })
 
     if all_master_items:
-        master_csv = Path("output/ghl_master_playlist_schedule.csv")
+        default_start = "2026-09-15"
+        default_end = "2026-11-30" if is_markus_or_linkedin else "2026-12-24"
+        start_str = args.start_date or default_start
+        end_str = args.end_date or default_end
         try:
-            start_dt = datetime.strptime(args.start_date, "%Y-%m-%d").replace(hour=18, minute=0, second=0)
+            start_dt = datetime.strptime(start_str, "%Y-%m-%d").replace(hour=18, minute=0, second=0)
         except Exception:
             start_dt = datetime(2026, 9, 15, 18, 0, 0)
         try:
-            end_dt = datetime.strptime(args.end_date, "%Y-%m-%d").replace(hour=18, minute=0, second=0)
+            end_dt = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=18, minute=0, second=0)
         except Exception:
-            end_dt = datetime(2026, 12, 24, 18, 0, 0)
+            end_dt = datetime(2026, 11, 30 if is_markus_or_linkedin else 12, 24, 18, 0, 0)
         create_master_ghl_schedule(
             all_rendered_items=all_master_items,
             output_csv_path=master_csv,
+            master_clips_dir=master_clips_dir,
             platform=target_platform,
             start_date=start_dt,
             end_date=end_dt,

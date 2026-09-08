@@ -376,7 +376,7 @@ def format_ghl_csv(
     print(f"[GHL Publisher] Exported {len(ghl_rows)} posts to {output_path} (GHL Social Planner compliant)")
 
     # Also write local companion report with virality scores, angles, hook banners, cover paths, and durations
-    meta_report_path = output_path.parent / "clips_metadata_report.csv"
+    meta_report_path = output_path.parent / f"{output_path.stem}_metadata_report.csv"
     meta_fieldnames = [
         "Post Date",
         "Platform",

@@ -241,11 +241,14 @@ def extract_clip_vtt_cues(
     return cues
 
 
+from core.gemini_extractor import resolve_gcp_project_id
+
+
 def polish_subtitles_with_gemini(
     raw_cues: List[Dict[str, Any]],
     clip_duration: float,
     spoken_opening: str = "",
-    project_id: str = "aiclipcutter-batch-7821",
+    project_id: Optional[str] = None,
     location: str = "global"
 ) -> List[Dict[str, Any]]:
     """
@@ -255,7 +258,9 @@ def polish_subtitles_with_gemini(
     if not raw_cues:
         return []
 
-    credentials_path = Path("config/gcp_service_account_key.json")
+    project_id = resolve_gcp_project_id(project_id)
+
+    credentials_path = Path(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/gcp_service_account_key.json"))
     if credentials_path.exists():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
@@ -277,11 +282,11 @@ Raw transcript with clip-relative timestamps:
 {formatted_raw}
 
 Task:
-1. Fix transcription typos, misspellings, and proper nouns (e.g. Kerry places, Rossbeigh Beach, names).
-2. Clean stuttering, false starts, and filler words ("um", "uh", "to to").
+1. Fix transcription typos, misspellings, and proper nouns (e.g. AI terms, company names, technical terminology).
+2. Clean stuttering, false starts, and filler words ("um", "uh", "you know").
 3. Preserve the exact words and cadence spoken by the speaker so the viewer reads what they hear.
 4. Chunk the dialogue into punchy, high-retention 2 to 5 word subtitle lines (all UPPERCASE).
-5. Ensure start and end timestamps match the speech flow between {first_start:.2f}s and {clip_duration:.1f}s. The first subtitle caption MUST NOT start before {first_start:.2f}s.
+5. TIMING PRECISION: When cleaning filler words, stutters, or preambles, DO NOT shift the remaining words earlier in time! The start timestamp of each subtitle line MUST accurately match when the speaker physically speaks those words in the raw transcript. The first subtitle caption MUST NOT start before {first_start:.2f}s.
 6. Return a strict JSON array of objects:
 [
   {{"start": {first_start:.2f}, "end": {first_start + 1.8:.2f}, "text": "RECOMMENDED ACTIVITY:"}},

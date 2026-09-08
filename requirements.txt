@@ -1,0 +1,6 @@
+# AIClipCutter Dependencies
+google-genai>=0.1.1
+Pillow>=10.0.0
+PyYAML>=6.0
+yt-dlp>=2024.0.0
+

@@ -1,0 +1,18 @@
+{
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/**": true,
+    "**/output/**": true,
+    "**/outputs/**": true,
+    "**/downloads/**": true,
+    "**/temp/**": true,
+    "**/venv/**": true,
+    "**/.venv/**": true
+  },
+  "git.autoFetch": false,
+  "git.autorefresh": true,
+  "git.ignoreLimitWarning": true,
+  "git.untrackedChanges": "mixed"
+}
+

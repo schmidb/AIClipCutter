@@ -28,19 +28,21 @@ cd /opt/aiclipcutter
 
 # Clone or sync AIClipCutter repository
 # In production, git clone your repository or sync from GCS:
-# gsutil cp -r gs://aiclipcutter-media-7821/code/* /opt/aiclipcutter/
+# gsutil cp -r gs://your-bucket-name/code/* /opt/aiclipcutter/
 
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install google-genai yt-dlp pyyaml
+pip install -r requirements.txt
 
 echo ">>> [4/5] Running Batch Clipping Job with AIClipCutter Native Pipeline..."
-python run_batch.py --playlist config/playlist_tedx.json --preset tedx
+python run_batch.py --playlist config/playlist_tedx.json --preset config/tedx.yaml
 
-# Sync final clips and schedule to Cloud Storage
-gsutil -m cp -r outputs/* gs://aiclipcutter-media-7821/clips/ || true
-gsutil cp output/ghl_social_planner_schedule.csv gs://aiclipcutter-media-7821/ || true
+# Sync final clips and schedule to Cloud Storage (if GCS_BUCKET_NAME configured)
+if [ -n "$GCS_BUCKET_NAME" ]; then
+    echo "Syncing rendered clips to gs://${GCS_BUCKET_NAME}..."
+    gsutil -m cp -r output/* "gs://${GCS_BUCKET_NAME}/clips/" || true
+fi
 
 echo ">>> [5/5] Batch processing complete. Automatically terminating VM..."
 ZONE=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/zone | awk -F/ '{print $NF}' || echo "")

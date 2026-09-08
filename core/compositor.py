@@ -14,15 +14,27 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 from typing import Optional, List, Tuple
+from PIL import Image, ImageDraw, ImageFont
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
+from core.gemini_extractor import resolve_gcp_project_id
 
 
 def detect_speaker_framing_trajectory(
     source_video: str,
     start_time: float,
     end_time: Optional[float] = None,
-    project_id: str = "aiclipcutter-batch-7821",
+    project_id: Optional[str] = None,
     location: str = "global",
     model_name: str = "gemini-3.8-flash"
 ) -> List[Tuple[float, float]]:
@@ -32,6 +44,8 @@ def detect_speaker_framing_trajectory(
     trajectory of the primary human speaker.
     Returns a list of (time_offset, center_ratio) tuples.
     """
+    project_id = resolve_gcp_project_id(project_id)
+
     if end_time is None or end_time <= start_time:
         duration = 3.0
     else:
@@ -51,7 +65,7 @@ def detect_speaker_framing_trajectory(
     temp_dir = Path("output/_temp_frames")
     temp_dir.mkdir(parents=True, exist_ok=True)
 
-    credentials_path = Path("config/gcp_service_account_key.json")
+    credentials_path = Path(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/gcp_service_account_key.json"))
     if credentials_path.exists():
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(credentials_path.resolve())
 
@@ -237,7 +251,7 @@ def detect_speaker_center_ratio(
     source_video: str,
     start_time: float,
     end_time: Optional[float] = None,
-    project_id: str = "aiclipcutter-batch-7821",
+    project_id: Optional[str] = None,
     location: str = "global",
     model_name: str = "gemini-3.8-flash"
 ) -> float:
@@ -256,6 +270,107 @@ def detect_speaker_center_ratio(
         centers = [c for _, c in trajectory]
         return round(sum(centers) / len(centers), 3)
     return 0.5
+def _get_font(font_names: List[str], size: int) -> ImageFont.ImageFont:
+    """Safely loads best available TrueType font on Windows, falling back to system/default."""
+    for f in font_names:
+        p = Path("C:/Windows/Fonts") / f
+        if p.exists():
+            try:
+                return ImageFont.truetype(str(p), size)
+            except Exception:
+                pass
+        try:
+            return ImageFont.truetype(f, size)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+
+def create_hook_banner_overlay(
+    headline: str,
+    output_png_path: str,
+    badge_text: Optional[str] = "TEDxGlenbeigh",
+    badge_color: Tuple[int, int, int, int] = (235, 0, 40, 240),
+    target_width: int = 1080,
+    target_height: int = 1920,
+    start_y: int = 230
+) -> Optional[str]:
+    """
+    Renders Style 1: Modern Dark Glass Pill with customizable Badge as a transparent RGBA PNG.
+    Supports official TED Red (#EB0028) or LinkedIn Blue (#0A66C2) with dynamic speaker branding.
+    Enforces strict 20-22 character wrapping to guarantee text never overflows the 1080px canvas.
+    """
+    clean_text = headline.replace("'", "").replace('"', "").replace(":", " -").strip().upper()
+    if not clean_text:
+        return None
+
+    lines = textwrap.wrap(clean_text, width=22)
+    if not lines:
+        return None
+
+    # Responsive font sizing based on line count
+    if len(lines) == 1:
+        font_size = 50
+    elif len(lines) == 2:
+        font_size = 46
+    else:
+        font_size = 40
+
+    font_title = _get_font(["arialbd.ttf", "segoeuib.ttf", "calibrib.ttf", "Arial-Bold"], font_size)
+    font_badge = _get_font(["segoeuib.ttf", "arialbd.ttf", "SegoeUI-Bold", "Arial-Bold"], 26)
+
+    overlay = Image.new("RGBA", (target_width, target_height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    # 1. Top Badge Pill (e.g. TED Red #EB0028 or LinkedIn Blue #0A66C2)
+    by = start_y
+    bh = 0
+    if badge_text:
+        b_bbox = font_badge.getbbox(badge_text)
+        bw = (b_bbox[2] - b_bbox[0]) + 32
+        bh = (b_bbox[3] - b_bbox[1]) + 16
+        bx = (target_width - bw) // 2
+        draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=12, fill=badge_color)
+        draw.text((bx + 16, by + 6), badge_text, font=font_badge, fill=(255, 255, 255, 255))
+
+    # 2. Main Headline Card (Dark Glass Pill with Drop Shadow)
+    line_height = int(font_size * 1.32)
+    box_padding_x = 36
+    box_padding_y = 22
+    max_line_w = max(font_title.getbbox(l)[2] - font_title.getbbox(l)[0] for l in lines)
+    total_text_h = len(lines) * line_height
+    main_box_w = max_line_w + (box_padding_x * 2)
+    main_box_h = total_text_h + (box_padding_y * 2) - 8
+    main_box_x = (target_width - main_box_w) // 2
+    main_box_y = (by + bh + 14) if badge_text else by
+
+    # Drop shadow
+    draw.rounded_rectangle(
+        [main_box_x + 4, main_box_y + 6, main_box_x + main_box_w + 4, main_box_y + main_box_h + 6],
+        radius=20,
+        fill=(0, 0, 0, 140)
+    )
+    # Glass pill
+    draw.rounded_rectangle(
+        [main_box_x, main_box_y, main_box_x + main_box_w, main_box_y + main_box_h],
+        radius=20,
+        fill=(15, 15, 15, 240),
+        outline=(255, 255, 255, 40),
+        width=2
+    )
+
+    # Centered headline lines
+    curr_y = main_box_y + box_padding_y
+    for l in lines:
+        lw = font_title.getbbox(l)[2] - font_title.getbbox(l)[0]
+        lx = (target_width - lw) // 2
+        draw.text((lx, curr_y), l, font=font_title, fill=(255, 255, 255, 255))
+        curr_y += line_height
+
+    out_p = Path(output_png_path)
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    overlay.save(output_png_path, "PNG")
+    return output_png_path
 
 
 def render_vertical_clip(
@@ -268,14 +383,17 @@ def render_vertical_clip(
     target_height: int = 1920,
     speaker_center_ratio: Optional[float] = None,
     enable_ai_centering: bool = True,
-    banner_fade_seconds: float = 3.5,
+    banner_fade_seconds: float = 2.5,
     ass_path: Optional[str] = None,
-    generate_cover: bool = True
+    generate_cover: bool = True,
+    badge_text: Optional[str] = "TEDxGlenbeigh",
+    badge_color: Tuple[int, int, int, int] = (235, 0, 40, 240)
 ) -> bool:
     """
     Renders a 9:16 vertical video clip from source video using FFmpeg.
     - Smart Multi-Point Auto-Framing (camera-cut aware, deadzone stability, smooth easing)
-    - 3.5s smooth fade-out hook headline banner
+    - Style 1 High-CTR Hook Overlay (Pillow broadcast badge + dark glass card)
+    - 2.5s display with 0.5s smooth alpha fade-out
     - Burned-in ASS dynamic subtitles in Instagram safe zone
     - Broadcast-standard -14 LUFS audio normalization + 0.08s micro-fade-in + 0.4s clean outro fade
     - Dedicated 1080x1920 cover image export (cover_*.jpg)
@@ -283,77 +401,101 @@ def render_vertical_clip(
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     duration = max(0.5, end_time - start_time)
 
-    # 1. AI Smart Centering & Framing
+    # 1. Base Video Crop & Scaling Filter
     if speaker_center_ratio is not None:
         ratio_str = f"{speaker_center_ratio:.4f}"
-        crop_filter = f"crop=ih*9/16:ih:'max(0,min(iw-ih*9/16,iw*{ratio_str}-ih*9/32))':0"
-        filter_complex = f"{crop_filter},scale={target_width}:{target_height}"
+        base_video_filter = f"crop=ih*9/16:ih:'max(0,min(iw-ih*9/16,iw*{ratio_str}-ih*9/32))':0,scale={target_width}:{target_height}"
     elif enable_ai_centering:
         trajectory = detect_speaker_framing_trajectory(
             source_video=source_video,
             start_time=start_time,
             end_time=end_time
         )
-        filter_complex = build_cinematic_crop_filter(
+        base_video_filter = build_cinematic_crop_filter(
             samples=trajectory,
             duration=duration,
             target_width=target_width,
             target_height=target_height
         )
     else:
-        crop_filter = f"crop=ih*9/16:ih:'max(0,min(iw-ih*9/16,iw*0.5000-ih*9/32))':0"
-        filter_complex = f"{crop_filter},scale={target_width}:{target_height}"
+        base_video_filter = f"crop=ih*9/16:ih:'max(0,min(iw-ih*9/16,iw*0.5000-ih*9/32))':0,scale={target_width}:{target_height}"
 
-    # 2. Clean hook text for FFmpeg drawtext
+    # 2. Hook Banner Overlay Generation (Style 1: Dark Glass Pill + Badge)
+    overlay_png_path = None
     clean_hook = hook_banner.replace("'", "").replace(":", " -").replace('"', "").strip()
-    if len(clean_hook) > 45:
-        words = clean_hook.split()
-        mid = len(words) // 2
-        clean_hook = " ".join(words[:mid]) + "\\n" + " ".join(words[mid:])
-
     if clean_hook:
-        if banner_fade_seconds and banner_fade_seconds > 0:
-            fade_start = max(0.5, banner_fade_seconds - 0.5)
-            fade_expr = f":enable='lte(t,{banner_fade_seconds})':alpha='if(lt(t,{fade_start}),1.0,1.0-(t-{fade_start})/0.5)'"
-        else:
-            fade_expr = ""
-        drawtext = (
-            f"drawtext=text='{clean_hook}':"
-            f"fontsize=46:fontcolor=white:"
-            f"box=1:boxcolor=black@0.65:boxborderw=18:"
-            f"line_spacing=12:"
-            f"x=(w-text_w)/2:y=240"
-            f"{fade_expr}"
-        )
-        filter_complex += f",{drawtext}"
+        out_p = Path(output_path)
+        temp_overlay = out_p.parent / f"_temp_banner_{out_p.stem}.png"
+        try:
+            overlay_png_path = create_hook_banner_overlay(
+                headline=clean_hook,
+                output_png_path=str(temp_overlay),
+                badge_text=badge_text,
+                badge_color=badge_color,
+                target_width=target_width,
+                target_height=target_height
+            )
+        except Exception as e:
+            print(f"⚠️ Warning generating banner overlay: {e}")
+            overlay_png_path = None
 
-    # 4. Burn-in ASS dynamic subtitles if provided
+    # 3. Audio Normalization & Fades
+    fade_start_audio = max(0.1, duration - 0.4)
+    audio_filter = f"highpass=f=80,loudnorm=I=-14:LRA=11:TP=-1.5,afade=t=in:st=0:d=0.08,afade=t=out:st={fade_start_audio:.2f}:d=0.4"
+
+    # 4. Construct FFmpeg Command
+    escaped_ass = ""
     if ass_path and os.path.exists(ass_path):
-        ass_filter_path = Path(ass_path).as_posix()
-        filter_complex += f",ass={ass_filter_path}"
+        rel_ass = os.path.relpath(ass_path).replace("\\", "/")
+        escaped_ass = f",ass=filename='{rel_ass}'"
 
-    duration = max(0.5, end_time - start_time)
-
-    # 5. Broadcast Audio Processing: Stage Rumble Cut (80Hz) + -14 LUFS Loudness + 0.08s Micro-Fade-In + 0.4s Smooth Outro Fade
-    fade_start = max(0.1, duration - 0.4)
-    audio_filter = f"highpass=f=80,loudnorm=I=-14:LRA=11:TP=-1.5,afade=t=in:st=0:d=0.08,afade=t=out:st={fade_start:.2f}:d=0.4"
-
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-ss", str(start_time),
-        "-i", source_video,
-        "-t", str(duration),
-        "-vf", filter_complex,
-        "-af", audio_filter,
-        "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "22",
-        "-c:a", "aac",
-        "-b:a", "192k",
-        "-movflags", "+faststart",
-        output_path
-    ]
+    if overlay_png_path and os.path.exists(overlay_png_path):
+        fade_start_banner = max(0.5, banner_fade_seconds - 0.5)
+        fade_duration = 0.5
+        fc = (
+            f"[0:v]{base_video_filter}[vid];"
+            f"[1:v]fade=t=out:st={fade_start_banner:.2f}:d={fade_duration:.2f}:alpha=1[banner];"
+            f"[vid][banner]overlay=0:0:enable='lte(t,{banner_fade_seconds:.2f})':format=auto{escaped_ass}[outv]"
+        )
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-ss", str(start_time),
+            "-i", source_video,
+            "-loop", "1",
+            "-t", str(banner_fade_seconds + 1.0),
+            "-i", str(Path(overlay_png_path).resolve()),
+            "-t", str(duration),
+            "-filter_complex", fc,
+            "-map", "[outv]",
+            "-map", "0:a",
+            "-af", audio_filter,
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "22",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-movflags", "+faststart",
+            output_path
+        ]
+    else:
+        fc = f"{base_video_filter}{escaped_ass}"
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-ss", str(start_time),
+            "-i", source_video,
+            "-t", str(duration),
+            "-vf", fc,
+            "-af", audio_filter,
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "22",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-movflags", "+faststart",
+            output_path
+        ]
 
     try:
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -361,8 +503,8 @@ def render_vertical_clip(
             file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
             x_info = f", speaker_x={speaker_center_ratio:.2f}" if speaker_center_ratio is not None else ""
             print(f"   ✅ Rendered: {os.path.basename(output_path)} ({duration:.1f}s, {file_size_mb:.2f} MB{x_info})")
-            
-            # 6. Dedicated High-Res Cover Thumbnail Generation
+
+            # 5. Dedicated High-Res Cover Thumbnail Generation
             if generate_cover:
                 out_p = Path(output_path)
                 cover_name = out_p.stem.replace("clip_", "cover_") + ".jpg"
@@ -388,3 +530,10 @@ def render_vertical_clip(
     except Exception as e:
         print(f"   ❌ Error executing FFmpeg: {e}")
         return False
+    finally:
+        if overlay_png_path and os.path.exists(overlay_png_path):
+            try:
+                os.remove(overlay_png_path)
+            except Exception:
+                pass
+

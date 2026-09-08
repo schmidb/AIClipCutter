@@ -182,7 +182,15 @@ def step_moments(
     return moments
 
 
-def step_render(source_video: Path, moments: list, work_dir: Path, force_rerender: bool = False) -> list:
+def step_render(
+    source_video: Path,
+    moments: list,
+    work_dir: Path,
+    force_rerender: bool = False,
+    preset: str = "",
+    speaker_name: str = "",
+    platform: str = ""
+) -> list:
     """Step 3: Cut and render 9:16 vertical MP4 video clips with VTT speech-boundary snapping."""
     print("\n" + "=" * 60)
     print("✂️ STEP 3: Cutting & Rendering 9:16 Vertical Video Clips (Speech Snapping + AI Smart Centering + Subtitles + FFmpeg)")
@@ -196,9 +204,21 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
     vtt_files = list(work_dir.glob("*.vtt"))
     vtt_path = vtt_files[0] if vtt_files else None
 
-    # Subtitle temp directory
-    temp_subs_dir = work_dir / "_temp_subs"
-    temp_subs_dir.mkdir(exist_ok=True)
+    # Subtitle directory (persisted so re-renders reuse polished subtitles)
+    subs_dir = work_dir / "subtitles"
+    subs_dir.mkdir(exist_ok=True)
+
+    # Determine badge text and color based on platform / preset / speaker
+    is_linkedin = "linkedin" in preset.lower() or platform.lower() == "linkedin" or "markus" in speaker_name.lower()
+    if is_linkedin:
+        badge_text = "Dr. Markus Schmidberger"
+        badge_color = (10, 102, 194, 240)  # Official LinkedIn Blue #0A66C2
+    elif "miriam" in speaker_name.lower() or "miriam" in preset.lower():
+        badge_text = "Miriam Schmidberger"
+        badge_color = (220, 80, 50, 240)
+    else:
+        badge_text = "TEDxGlenbeigh"
+        badge_color = (235, 0, 40, 240)  # Official TED Red #EB0028
 
     for i, m in enumerate(moments, 1):
         clip_idx = m.get("clip_index", i)
@@ -252,16 +272,19 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
 
         # AI Subtitle Polishing (Fix typos, Irish place names, verbal stutters)
         ass_path = None
-        if vtt_path and vtt_path.exists():
+        target_ass = subs_dir / f"clip_{clip_idx}.ass"
+        if target_ass.exists() and target_ass.stat().st_size > 50:
+            print(f"   📝 Reusing cached subtitle file: {target_ass.name}")
+            ass_path = str(target_ass)
+        elif vtt_path and vtt_path.exists():
             raw_cues = extract_clip_vtt_cues(vtt_path, start_t, end_t, vocal_start=vocal_t)
             if raw_cues:
                 print(f"   📝 Polishing {len(raw_cues)} subtitle cues with Gemini 3.8 Flash...")
                 polished_cues = polish_subtitles_with_gemini(
                     raw_cues, duration, spoken_opening=spoken_opening
                 )
-                temp_ass = temp_subs_dir / f"clip_{clip_idx}.ass"
-                generate_ass_file(polished_cues, temp_ass)
-                ass_path = str(temp_ass)
+                generate_ass_file(polished_cues, target_ass)
+                ass_path = str(target_ass)
 
         success = render_vertical_clip(
             source_video=str(source_video),
@@ -271,7 +294,9 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
             hook_banner=hook,
             enable_ai_centering=True,
             ass_path=ass_path,
-            generate_cover=True
+            generate_cover=True,
+            badge_text=badge_text,
+            badge_color=badge_color
         )
 
         if success:
@@ -291,10 +316,6 @@ def step_render(source_video: Path, moments: list, work_dir: Path, force_rerende
     except Exception as e:
         print(f"⚠️ Warning saving updated moments.json: {e}")
 
-    # Clean up temp subtitles
-    import shutil
-    shutil.rmtree(temp_subs_dir, ignore_errors=True)
-
     print(f"\n🎉 Successfully rendered {len(rendered_clips)} clips in {clips_dir}!")
     return rendered_clips
 
@@ -313,15 +334,16 @@ def step_ghl(
     print("=" * 60)
 
     # Optional sync to Google Cloud Storage bucket
-    gcs_bucket = "aiclipcutter-media-7821"
+    gcs_bucket = os.getenv("GCS_BUCKET_NAME", "")
     has_gcs = False
 
-    try:
-        res = subprocess.run(["gcloud", "auth", "print-access-token"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if res.returncode == 0:
-            has_gcs = True
-    except Exception:
-        pass
+    if gcs_bucket:
+        try:
+            res = subprocess.run(["gcloud", "auth", "print-access-token"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if res.returncode == 0:
+                has_gcs = True
+        except Exception:
+            pass
 
     ghl_items = []
     for item in rendered_clips:
@@ -370,7 +392,8 @@ def process_single_video(
     speaker: str = "",
     platform: str = None,
     min_virality: int = None,
-    force_rerender: bool = False
+    force_rerender: bool = False,
+    output_dir: Optional[Path] = None
 ) -> list:
     """Processes a single video: downloads, hunts moments, renders clips, and creates GHL schedule."""
     video_id = extract_video_id(url)
@@ -389,7 +412,10 @@ def process_single_video(
             preset = "config/linkedin.yaml"
 
     target_platform = platform or ("LinkedIn" if "linkedin" in preset.lower() else "Instagram")
-    work_dir = Path("output") / video_id
+    if output_dir is not None:
+        work_dir = Path(output_dir) / video_id
+    else:
+        work_dir = Path("output") / video_id
     work_dir.mkdir(parents=True, exist_ok=True)
 
     print("\n" + "=" * 70)
@@ -452,7 +478,15 @@ def process_single_video(
                 full_video_url=full_video_url,
                 min_virality=min_virality
             )
-        rendered_clips = step_render(source_video, moments, work_dir, force_rerender=force_rerender)
+        rendered_clips = step_render(
+            source_video=source_video,
+            moments=moments,
+            work_dir=work_dir,
+            force_rerender=force_rerender,
+            preset=preset,
+            speaker_name=speaker_name,
+            platform=target_platform
+        )
 
     if step in ["all", "ghl"]:
         if not rendered_clips:

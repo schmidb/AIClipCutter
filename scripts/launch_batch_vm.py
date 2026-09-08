@@ -7,13 +7,16 @@ uploads the outputs to Cloud Storage, and auto-terminates.
 import argparse
 import subprocess
 import sys
+import os
 from pathlib import Path
+from core.gemini_extractor import resolve_gcp_project_id
 
 
-PROJECT_ID = "aiclipcutter-batch-7821"
-DEFAULT_ZONE = "europe-west1-b"
+PROJECT_ID = resolve_gcp_project_id()
+DEFAULT_ZONE = os.getenv("GCP_ZONE", "europe-west1-b")
 DEFAULT_MACHINE_TYPE = "c2-standard-8"  # High compute (8 vCPUs) out-of-the-box, or g2-standard-4 for L4 GPU
-BUCKET_NAME = "aiclipcutter-media-7821"
+BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "your-gcs-bucket-name")
+SERVICE_ACCOUNT = os.getenv("GCP_SERVICE_ACCOUNT", f"aiclipcutter-sa@{PROJECT_ID}.iam.gserviceaccount.com")
 
 
 def launch_vm(
@@ -34,7 +37,7 @@ def launch_vm(
         "--boot-disk-size=100GB",
         "--boot-disk-type=pd-ssd",
         "--scopes=cloud-platform",
-        f"--service-account=aiclipcutter-sa@{PROJECT_ID}.iam.gserviceaccount.com",
+        f"--service-account={SERVICE_ACCOUNT}",
         "--max-run-duration=2h",
         "--instance-termination-action=DELETE",
         f"--metadata-from-file=startup-script={startup_script}"
