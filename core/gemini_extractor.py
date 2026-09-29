@@ -20,12 +20,23 @@ def load_preset(preset_path: str) -> Dict[str, Any]:
 
 
 def resolve_gcp_project_id(explicit_id: Optional[str] = None) -> str:
-    """Resolves GCP Project ID from explicit argument, environment variable, or service account JSON."""
+    """Resolves GCP Project ID from explicit argument, environment variable, gcloud config, or service account JSON."""
     if explicit_id:
         return explicit_id
     env_id = os.getenv("GCP_PROJECT_ID")
     if env_id:
         return env_id
+    # Try gcloud config
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["gcloud", "config", "get-value", "project"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
     cred_env = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "config/gcp_service_account_key.json")
     cred_path = Path(cred_env)
     if cred_path.exists():
